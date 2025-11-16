@@ -52,11 +52,12 @@ function createDummyDoc(id: string, name: string, path: string): DocumentContent
 }
 
 interface Params {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export async function GET(_request: Request, { params }: Params) {
-  const doc = dummyDocumentMap[params.id];
+  const { id } = await params;
+  const doc = dummyDocumentMap[id];
 
   if (!doc) {
     return new NextResponse("Document not found", { status: 404 });
