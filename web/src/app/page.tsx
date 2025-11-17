@@ -1,12 +1,15 @@
 "use client";
 
 // web/src/app/page.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { ChatMessage, DocNode, DocumentContent } from "@/lib/types";
 
 const DEFAULT_CONVERSATION_ID = "demo-conversation";
+const CHAT_STORAGE_KEY = "synapsegpt-chat-history";
 
 export default function HomePage() {
   const [docs, setDocs] = useState<DocNode[]>([]);
@@ -23,6 +26,47 @@ export default function HomePage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [docFilter, setDocFilter] = useState("");
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [streamingCharCount, setStreamingCharCount] = useState(0);
+  
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as ChatMessage[];
+        setChatMessages(parsed);
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }, []);
+
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatMessages));
+    }
+  }, [chatMessages]);
+
+  // Auto-scroll to bottom during streaming
+  useEffect(() => {
+    if (shouldAutoScroll && chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages, shouldAutoScroll]);
+
+  // Detect manual scroll to disable auto-scroll
+  const handleScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    setShouldAutoScroll(isNearBottom);
+  };
 
   // Initial docs load.
   useEffect(() => {
@@ -94,6 +138,8 @@ export default function HomePage() {
 
     setChatInput("");
     setChatMessages((prev) => [...prev, userMessage]);
+    setShouldAutoScroll(true);
+    setStreamingCharCount(0);
 
     // Prepare a placeholder assistant message that will be filled as streaming proceeds.
     const assistantIndex = chatMessages.length + 1;
@@ -106,6 +152,9 @@ export default function HomePage() {
     setChatMessages((prev) => [...prev, initialAssistant]);
 
     setIsStreaming(true);
+    
+    const controller = new AbortController();
+    setAbortController(controller);
 
     try {
       const res = await fetch("/api/chat/stream", {
@@ -118,6 +167,7 @@ export default function HomePage() {
           mode: "question",
           message: userMessage.content,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -143,19 +193,79 @@ export default function HomePage() {
             };
             return updated;
           });
+          
+          // Update character count
+          setStreamingCharCount((prev) => prev + chunk.length);
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      const errorAssistant: ChatMessage = {
-        role: "assistant",
-        content: `Error: ${message}`,
-        mode: "question",
-        createdAt: new Date().toISOString(),
-      };
-      setChatMessages((prev) => [...prev.slice(0, assistantIndex), errorAssistant]);
+      if ((err as Error).name === 'AbortError') {
+        setChatMessages((prev) => {
+          const updated = [...prev];
+          if (updated[assistantIndex]) {
+            updated[assistantIndex] = {
+              ...updated[assistantIndex],
+              content: updated[assistantIndex].content + "\n\n*[Response stopped by user]*",
+            };
+          }
+          return updated;
+        });
+      } else {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        const errorAssistant: ChatMessage = {
+          role: "assistant",
+          content: `Error: ${message}`,
+          mode: "question",
+          createdAt: new Date().toISOString(),
+        };
+        setChatMessages((prev) => [...prev.slice(0, assistantIndex), errorAssistant]);
+      }
     } finally {
       setIsStreaming(false);
+      setAbortController(null);
+      setStreamingCharCount(0);
+    }
+  };
+
+  const handleStopGeneration = () => {
+    if (abortController) {
+      abortController.abort();
+    }
+  };
+
+  const handleClearConversation = () => {
+    if (confirm("Clear all chat messages?")) {
+      setChatMessages([]);
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+    }
+  };
+
+  const handleRegenerateResponse = async () => {
+    if (chatMessages.length < 2) return;
+    
+    // Find the last user message
+    const lastUserMsgIndex = chatMessages.findLastIndex(m => m.role === "user");
+    if (lastUserMsgIndex === -1) return;
+    
+    const lastUserMessage = chatMessages[lastUserMsgIndex];
+    
+    // Remove messages after the last user message
+    setChatMessages((prev) => prev.slice(0, lastUserMsgIndex + 1));
+    
+    // Re-trigger the same message
+    setChatInput(lastUserMessage.content);
+    setTimeout(() => {
+      const form = document.querySelector('form');
+      if (form) {
+        form.requestSubmit();
+      }
+    }, 100);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend(e as unknown as React.FormEvent);
     }
   };
 
@@ -281,8 +391,36 @@ export default function HomePage() {
 
       {/* Right: chat panel */}
       <section className="w-1/4 p-3 flex flex-col">
-        <h2 className="text-sm font-semibold mb-2">Chat</h2>
-        <div className="flex-1 border border-slate-800 rounded-md p-3 mb-2 overflow-auto space-y-3">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold">Chat</h2>
+          <div className="flex gap-2">
+            {chatMessages.length > 0 && (
+              <>
+                <button
+                  onClick={handleRegenerateResponse}
+                  disabled={isStreaming || chatMessages.length < 2}
+                  className="text-[10px] px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Regenerate last response"
+                >
+                  ↻ Regenerate
+                </button>
+                <button
+                  onClick={handleClearConversation}
+                  disabled={isStreaming}
+                  className="text-[10px] px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Clear conversation"
+                >
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+        <div 
+          ref={chatContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 border border-slate-800 rounded-md p-3 mb-2 overflow-auto space-y-3"
+        >
           {chatMessages.length === 0 && (
             <p className="text-xs text-slate-500">
               Start a conversation about the selected document.
@@ -293,9 +431,14 @@ export default function HomePage() {
               key={`${msg.role}-${msg.createdAt}-${index}`}
               className={`px-3 py-2 rounded-md ${msg.role === "user" ? "bg-sky-700/60 ml-8" : "bg-slate-800/80 mr-2"}`}
             >
-              <span className="block text-[10px] uppercase tracking-wider text-slate-400 mb-1.5 font-semibold">
-                {msg.role === "user" ? "You" : "Assistant"}
-              </span>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                  {msg.role === "user" ? "You" : "Assistant"}
+                </span>
+                <span className="text-[9px] text-slate-500">
+                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
               {msg.role === "assistant" ? (
                 <div className="prose prose-invert prose-xs max-w-none text-xs
                   prose-p:my-4 prose-p:leading-relaxed
@@ -308,30 +451,103 @@ export default function HomePage() {
                   prose-code:text-sky-300 prose-code:bg-slate-900/70 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs
                   prose-strong:font-semibold
                   prose-a:text-sky-400 prose-a:underline">
-                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{msg.content}</ReactMarkdown>
+                  <ReactMarkdown 
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      code({ className, children, ...props }: any) {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const codeString = String(children).replace(/\n$/, '');
+                        const isInline = !className;
+                        
+                        return !isInline && match ? (
+                          <div className="relative group">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(codeString);
+                              }}
+                              className="absolute right-2 top-2 px-2 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              Copy
+                            </button>
+                            <SyntaxHighlighter
+                              style={vscDarkPlus as any}
+                              language={match[1]}
+                              PreTag="div"
+                              customStyle={{
+                                margin: 0,
+                                borderRadius: '0.375rem',
+                                fontSize: '0.75rem',
+                              }}
+                              {...props}
+                            >
+                              {codeString}
+                            </SyntaxHighlighter>
+                          </div>
+                        ) : (
+                          <code className={className} {...props}>
+                            {children}
+                          </code>
+                        );
+                      },
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
                 </div>
               ) : (
-                <span className="text-xs leading-relaxed">{msg.content}</span>
+                <span className="text-xs leading-relaxed whitespace-pre-wrap">{msg.content}</span>
               )}
             </div>
           ))}
+          {isStreaming && (
+            <div className="px-3 py-2 rounded-md bg-slate-800/80 mr-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-400 text-xs">
+                  <div className="flex gap-1">
+                    <span className="animate-bounce" style={{ animationDelay: '0ms' }}>●</span>
+                    <span className="animate-bounce" style={{ animationDelay: '150ms' }}>●</span>
+                    <span className="animate-bounce" style={{ animationDelay: '300ms' }}>●</span>
+                  </div>
+                  <span>Generating response...</span>
+                </div>
+                {streamingCharCount > 0 && (
+                  <span className="text-[10px] font-mono text-sky-400">
+                    {streamingCharCount} chars
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
         </div>
-        <form className="flex gap-2" onSubmit={handleSend}>
-          <input
-            type="text"
-            placeholder="Ask anything about this document…"
-            className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-sky-500"
+        <form className="flex flex-col gap-2" onSubmit={handleSend}>
+          <textarea
+            placeholder="Ask anything about this document… (Shift+Enter for new line)"
+            className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-sky-500 resize-none min-h-[60px]"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             disabled={!selectedDocId || isStreaming}
+            rows={2}
           />
-          <button
-            type="submit"
-            className="px-3 py-1 text-xs rounded-md bg-sky-600 hover:bg-sky-500"
-            disabled={!selectedDocId || isStreaming || !chatInput.trim()}
-          >
-            {isStreaming ? "Streaming…" : "Send"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="flex-1 px-3 py-1.5 text-xs rounded-md bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!selectedDocId || isStreaming || !chatInput.trim()}
+            >
+              {isStreaming ? "Streaming…" : "Send"}
+            </button>
+            {isStreaming && (
+              <button
+                type="button"
+                onClick={handleStopGeneration}
+                className="px-3 py-1.5 text-xs rounded-md bg-red-600 hover:bg-red-500"
+              >
+                Stop
+              </button>
+            )}
+          </div>
         </form>
       </section>
     </main>
