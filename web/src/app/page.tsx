@@ -30,8 +30,20 @@ export default function HomePage() {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [streamingCharCount, setStreamingCharCount] = useState(0);
   
+  const [summaryContent, setSummaryContent] = useState<string>("");
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  
+  const [leftPanelWidth, setLeftPanelWidth] = useState(20); // percentage
+  const [rightPanelWidth, setRightPanelWidth] = useState(25); // percentage
+  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
+  const [isDraggingRight, setIsDraggingRight] = useState(false);
+  
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const summaryContentRef = useRef<HTMLDivElement>(null);
+  const [isSummaryOverflowing, setIsSummaryOverflowing] = useState(false);
 
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -59,6 +71,17 @@ export default function HomePage() {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatMessages, shouldAutoScroll]);
+
+  // Detect if summary content is overflowing
+  useEffect(() => {
+    if (summaryContentRef.current && summaryContent && !isSummaryLoading) {
+      const element = summaryContentRef.current;
+      const isOverflowing = element.scrollHeight > element.clientHeight;
+      setIsSummaryOverflowing(isOverflowing);
+    } else {
+      setIsSummaryOverflowing(false);
+    }
+  }, [summaryContent, isSummaryLoading, isSummaryExpanded]);
 
   // Detect manual scroll to disable auto-scroll
   const handleScroll = () => {
@@ -100,6 +123,8 @@ export default function HomePage() {
   useEffect(() => {
     if (!selectedDocId) {
       setDocContent(null);
+      setSummaryContent("");
+      setSummaryError(null);
       return;
     }
 
@@ -114,6 +139,9 @@ export default function HomePage() {
         }
         const data = (await res.json()) as DocumentContent;
         setDocContent(data);
+        
+        // Auto-generate summary when document loads
+        handleGenerateSummary();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         setDocError(message);
@@ -123,6 +151,7 @@ export default function HomePage() {
     };
 
     void loadDoc();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDocId]);
 
   const handleSend = async (event: React.FormEvent) => {
@@ -269,6 +298,58 @@ export default function HomePage() {
     }
   };
 
+  const handleGenerateSummary = async () => {
+    if (!selectedDocId || isSummaryLoading) return;
+
+    setSummaryContent("");
+    setSummaryError(null);
+    setIsSummaryLoading(true);
+
+    const controller = new AbortController();
+
+    try {
+      const res = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: "summary-" + selectedDocId,
+          docId: selectedDocId,
+          sectionId: null,
+          mode: "summary",
+          message: "Provide a concise summary of this document.",
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Summary request failed: ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      let done = false;
+      let accumulatedContent = "";
+      
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          const chunk = decoder.decode(value);
+          accumulatedContent += chunk;
+          setSummaryContent(accumulatedContent);
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setSummaryError(message);
+      }
+    } finally {
+      setIsSummaryLoading(false);
+    }
+  };
+
   const filterDocs = (nodes: DocNode[], query: string): DocNode[] => {
     if (!query.trim()) return nodes;
     const lowerQuery = query.toLowerCase();
@@ -310,11 +391,52 @@ export default function HomePage() {
     setExpandedFolders((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const handleMouseMoveLeft = React.useCallback((e: MouseEvent) => {
+    const newWidth = (e.clientX / window.innerWidth) * 100;
+    if (newWidth >= 10 && newWidth <= 40) {
+      setLeftPanelWidth(newWidth);
+    }
+  }, []);
+
+  const handleMouseMoveRight = React.useCallback((e: MouseEvent) => {
+    const newWidth = ((window.innerWidth - e.clientX) / window.innerWidth) * 100;
+    if (newWidth >= 15 && newWidth <= 50) {
+      setRightPanelWidth(newWidth);
+    }
+  }, []);
+
+  const handleMouseUp = React.useCallback(() => {
+    setIsDraggingLeft(false);
+    setIsDraggingRight(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDraggingLeft) {
+      window.addEventListener('mousemove', handleMouseMoveLeft as EventListener);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMoveLeft as EventListener);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDraggingLeft, handleMouseMoveLeft, handleMouseUp]);
+
+  useEffect(() => {
+    if (isDraggingRight) {
+      window.addEventListener('mousemove', handleMouseMoveRight as EventListener);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMoveRight as EventListener);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDraggingRight, handleMouseMoveRight, handleMouseUp]);
+
   return (
-    <main className="h-screen w-screen flex bg-slate-950 text-slate-50">
+    <main className="h-screen w-screen flex bg-slate-950 text-slate-50 overflow-hidden">
       {/* Left: document browser */}
-      <section className="w-1/5 border-r border-slate-800 flex flex-col bg-slate-950/60">
-        <div className="border-b border-slate-900 px-3 py-2">
+      <section className="border-r border-slate-800 flex flex-col bg-slate-950/60 overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
+        <div className="border-b border-slate-900 px-3 py-2 shrink-0">
           <h2 className="text-sm font-semibold mb-2">Documents</h2>
           <input
             type="text"
@@ -351,16 +473,98 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Resize handle for left panel */}
+      <div
+        className="w-1 bg-slate-800 hover:bg-sky-500 cursor-col-resize transition-colors shrink-0"
+        onMouseDown={() => setIsDraggingLeft(true)}
+      />
+
       {/* Center: summary (top 25%) + raw viewer (bottom 75%) */}
-      <section className="flex-1 flex flex-col border-r border-slate-800">
-        <div className="h-1/4 border-b border-slate-800 p-3">
-          <h2 className="text-sm font-semibold mb-2">AI Summary</h2>
-          <p className="text-xs text-slate-400">
-            {/* In a later unit this will call the LLM to summarize the selected document or section. */}
-            Select a document to see a summary here.
-          </p>
+      <section className="flex-1 flex flex-col border-r border-slate-800 overflow-y-auto">
+        <div className={`flex flex-col transition-all duration-300 relative shrink-0 ${
+          isSummaryExpanded ? '' : 'h-1/4'
+        }`}>
+          <div className={`p-3 pb-2 flex flex-col ${
+            isSummaryExpanded ? '' : 'h-full overflow-hidden'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold">AI Summary</h2>
+              {selectedDocId && (
+                <button
+                  onClick={handleGenerateSummary}
+                  disabled={isSummaryLoading}
+                  className="px-2 py-1 text-[10px] bg-sky-600 hover:bg-sky-700 disabled:bg-slate-700 disabled:text-slate-500 rounded transition-colors"
+                >
+                  {isSummaryLoading ? "Generating..." : "Regenerate"}
+                </button>
+              )}
+            </div>
+            
+            {!selectedDocId && (
+              <p className="text-xs text-slate-400">Select a document to see its summary.</p>
+            )}
+            
+            {selectedDocId && isSummaryLoading && (
+              <div className="flex items-center gap-2 text-slate-400 text-xs">
+                <div className="flex gap-1">
+                  <span className="animate-bounce" style={{ animationDelay: '0ms' }}>●</span>
+                  <span className="animate-bounce" style={{ animationDelay: '150ms' }}>●</span>
+                  <span className="animate-bounce" style={{ animationDelay: '300ms' }}>●</span>
+                </div>
+                <span>Generating summary...</span>
+              </div>
+            )}
+            
+            {selectedDocId && summaryError && (
+              <div className="text-xs text-red-400">
+                Error: {summaryError}
+              </div>
+            )}
+            
+            {selectedDocId && !isSummaryLoading && summaryContent && (
+              <div ref={summaryContentRef} className={isSummaryExpanded ? 'pb-3' : 'flex-1 overflow-auto'}>
+                <div className="prose prose-invert prose-xs max-w-none text-xs
+                  prose-p:my-3 prose-p:leading-relaxed
+                  prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
+                  prose-ol:my-3 prose-ol:pl-5 prose-ol:space-y-1
+                  prose-li:my-1
+                  prose-h1:text-sm prose-h1:font-bold prose-h1:mt-4 prose-h1:mb-2
+                  prose-h2:text-xs prose-h2:font-bold prose-h2:mt-3 prose-h2:mb-1.5
+                  prose-h3:text-xs prose-h3:font-semibold prose-h3:mt-2 prose-h3:mb-1
+                  prose-code:text-[10px] prose-code:bg-slate-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+                  prose-pre:my-3 prose-pre:bg-slate-900 prose-pre:p-2"
+                >
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                    {summaryContent}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Divider with expand/collapse button */}
+          <div className="relative h-px bg-slate-800">
+            {isSummaryOverflowing && (
+              <button
+                onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-full transition-colors shadow-lg flex items-center gap-1"
+              >
+                {isSummaryExpanded ? (
+                  <>
+                    <span>↑</span>
+                    <span>Collapse</span>
+                  </>
+                ) : (
+                  <>
+                    <span>↓</span>
+                    <span>Expand</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex-1 p-3 overflow-auto">
+        <div className="shrink-0 p-3">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold">Document Viewer</h2>
             {docContent && (
@@ -389,9 +593,15 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Resize handle for right panel */}
+      <div
+        className="w-1 bg-slate-800 hover:bg-sky-500 cursor-col-resize transition-colors shrink-0"
+        onMouseDown={() => setIsDraggingRight(true)}
+      />
+
       {/* Right: chat panel */}
-      <section className="w-1/4 p-3 flex flex-col">
-        <div className="flex items-center justify-between mb-2">
+      <section className="p-3 flex flex-col overflow-hidden" style={{ width: `${rightPanelWidth}%` }}>
+        <div className="flex items-center justify-between mb-2 shrink-0">
           <h2 className="text-sm font-semibold">Chat</h2>
           <div className="flex gap-2">
             {chatMessages.length > 0 && (
