@@ -7,6 +7,9 @@ import rehypeRaw from "rehype-raw";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { ChatMessage, DocNode, DocumentContent } from "@/lib/types";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { DocumentTreeSkeleton, DocumentViewerSkeleton, SummarySkeleton } from "@/components/Skeleton";
+import { SettingsModal } from "@/components/SettingsModal";
 
 const DEFAULT_CONVERSATION_ID = "demo-conversation";
 const CHAT_STORAGE_KEY = "synapsegpt-chat-history";
@@ -26,6 +29,16 @@ export default function HomePage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [docFilter, setDocFilter] = useState("");
+  const [contentSearch, setContentSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<{docId: string, matches: number}[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState({
+    aiModel: "gpt-oss:20b",
+    temperature: 0.7,
+    defaultLeftWidth: 20,
+    defaultRightWidth: 25,
+  });
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [streamingCharCount, setStreamingCharCount] = useState(0);
@@ -35,6 +48,10 @@ export default function HomePage() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   
+  const [showSections, setShowSections] = useState(true);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  
   const [leftPanelWidth, setLeftPanelWidth] = useState(20); // percentage
   const [rightPanelWidth, setRightPanelWidth] = useState(25); // percentage
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
@@ -43,6 +60,8 @@ export default function HomePage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const summaryContentRef = useRef<HTMLDivElement>(null);
+  const documentViewerRef = useRef<HTMLDivElement>(null);
+  const documentContentRef = useRef<HTMLDivElement>(null);
   const [isSummaryOverflowing, setIsSummaryOverflowing] = useState(false);
 
   // Load chat history from localStorage on mount
@@ -154,6 +173,56 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDocId]);
 
+  // Section navigation handler
+  const handleSectionClick = (sectionId: string) => {
+    setSelectedSectionId(sectionId);
+    
+    if (!documentViewerRef.current || !docContent) return;
+    
+    const section = docContent.sections.find(s => s.id === sectionId);
+    if (!section) return;
+
+    // Find the heading element by searching for the section title in the rendered content
+    const headings = documentViewerRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const targetHeading = Array.from(headings).find(h => 
+      h.textContent?.trim() === section.title
+    );
+
+    if (targetHeading) {
+      targetHeading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Track active section on scroll
+  useEffect(() => {
+    if (!documentViewerRef.current || !documentContentRef.current || !docContent || docContent.sections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const heading = entry.target;
+            const sectionTitle = heading.textContent?.trim();
+            const section = docContent.sections.find(s => s.title === sectionTitle);
+            if (section) {
+              setActiveSectionId(section.id);
+            }
+          }
+        });
+      },
+      {
+        root: documentViewerRef.current,
+        rootMargin: '-20% 0px -70% 0px',
+        threshold: 0,
+      }
+    );
+
+    const headings = documentContentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    headings.forEach(heading => observer.observe(heading));
+
+    return () => observer.disconnect();
+  }, [docContent]);
+
   const handleSend = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!chatInput.trim() || !selectedDocId || isStreaming) return;
@@ -192,7 +261,7 @@ export default function HomePage() {
         body: JSON.stringify({
           conversationId: DEFAULT_CONVERSATION_ID,
           docId: selectedDocId,
-          sectionId: null,
+          sectionId: selectedSectionId,
           mode: "question",
           message: userMessage.content,
         }),
@@ -391,6 +460,62 @@ export default function HomePage() {
     setExpandedFolders((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // Full-text search across all documents
+  const handleContentSearch = async () => {
+    if (!contentSearch.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    const results: {docId: string, matches: number}[] = [];
+    const searchLower = contentSearch.toLowerCase();
+
+    // Search through all loaded documents
+    for (const doc of docs) {
+      if (doc.type === "file") {
+        try {
+          const encodedId = encodeURIComponent(doc.id);
+          const res = await fetch(`/api/docs/${encodedId}`);
+          if (res.ok) {
+            const data = (await res.json()) as DocumentContent;
+            const matches = (data.rawText.toLowerCase().match(new RegExp(searchLower, 'g')) || []).length;
+            if (matches > 0) {
+              results.push({ docId: doc.id, matches });
+            }
+          }
+        } catch {
+          // Skip errors for individual documents
+        }
+      }
+    }
+
+    setSearchResults(results.sort((a, b) => b.matches - a.matches));
+    setIsSearching(false);
+  };
+
+  const handleSaveSettings = (newSettings: typeof settings) => {
+    setSettings(newSettings);
+    setLeftPanelWidth(newSettings.defaultLeftWidth);
+    setRightPanelWidth(newSettings.defaultRightWidth);
+    localStorage.setItem('synapsegpt-settings', JSON.stringify(newSettings));
+  };
+
+  // Load settings from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('synapsegpt-settings');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setSettings(parsed);
+        setLeftPanelWidth(parsed.defaultLeftWidth || 20);
+        setRightPanelWidth(parsed.defaultRightWidth || 25);
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }, []);
+
   const handleMouseMoveLeft = React.useCallback((e: MouseEvent) => {
     const newWidth = (e.clientX / window.innerWidth) * 100;
     if (newWidth >= 10 && newWidth <= 40) {
@@ -437,39 +562,73 @@ export default function HomePage() {
       {/* Left: document browser */}
       <section className="border-r border-slate-800 flex flex-col bg-slate-950/60 overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
         <div className="border-b border-slate-900 px-3 py-2 shrink-0">
-          <h2 className="text-sm font-semibold mb-2">Documents</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold">Documents</h2>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
+              title="Settings"
+            >
+              ⚙️
+            </button>
+          </div>
           <input
             type="text"
             value={docFilter}
             onChange={(e) => setDocFilter(e.target.value)}
             placeholder="Filter by name or path…"
-            className="w-full rounded bg-slate-900/80 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded bg-slate-900/80 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 mb-2"
           />
-        </div>
-        <div className="flex-1 text-xs text-slate-200 overflow-auto p-3">
-          {isDocsLoading && <p className="text-slate-500">Loading documents…</p>}
-          {docsError && (
-            <p className="text-red-400">Failed to load docs: {docsError}</p>
-          )}
-          {!isDocsLoading && !docsError && visibleDocs.length === 0 && (
-            <p className="text-slate-500">No documents found.</p>
-          )}
-          {!isDocsLoading && !docsError && visibleDocs.length > 0 && (
-            <div className="space-y-1">
-              {visibleDocs.map((node) => (
-                <DocTreeNode
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  expanded={expandedFolders}
-                  onToggleFolder={toggleFolder}
-                  selectedDocId={selectedDocId}
-                  onSelectDoc={setSelectedDocId}
-                  filterQuery={docFilter}
-                />
-              ))}
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={contentSearch}
+              onChange={(e) => setContentSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleContentSearch()}
+              placeholder="Search content…"
+              className="flex-1 rounded bg-slate-900/80 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            />
+            <button
+              onClick={handleContentSearch}
+              disabled={isSearching || !contentSearch.trim()}
+              className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-700 disabled:bg-slate-700 disabled:text-slate-500 rounded transition-colors"
+            >
+              {isSearching ? '...' : '🔍'}
+            </button>
+          </div>
+          {searchResults.length > 0 && (
+            <div className="mt-2 text-[10px] text-slate-400">
+              {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
             </div>
           )}
+        </div>
+        <div className="flex-1 text-xs text-slate-200 overflow-auto p-3">
+          <ErrorBoundary>
+            {isDocsLoading && <DocumentTreeSkeleton />}
+            {docsError && (
+              <p className="text-red-400">Failed to load docs: {docsError}</p>
+            )}
+            {!isDocsLoading && !docsError && visibleDocs.length === 0 && (
+              <p className="text-slate-500">No documents found.</p>
+            )}
+            {!isDocsLoading && !docsError && visibleDocs.length > 0 && (
+              <div className="space-y-1">
+                {visibleDocs.map((node) => (
+                  <DocTreeNode
+                    key={node.id}
+                    node={node}
+                    depth={0}
+                    expanded={expandedFolders}
+                    onToggleFolder={toggleFolder}
+                    selectedDocId={selectedDocId}
+                    onSelectDoc={setSelectedDocId}
+                    filterQuery={docFilter}
+                    searchResults={searchResults}
+                  />
+                ))}
+              </div>
+            )}
+          </ErrorBoundary>
         </div>
       </section>
 
@@ -480,14 +639,73 @@ export default function HomePage() {
       />
 
       {/* Center: summary (top 25%) + raw viewer (bottom 75%) */}
-      <section className="flex-1 flex flex-col border-r border-slate-800 overflow-y-auto">
-        <div className={`flex flex-col transition-all duration-300 relative shrink-0 ${
-          isSummaryExpanded ? '' : 'h-1/4'
+      <section className="flex-1 flex border-r border-slate-800 overflow-y-auto" ref={documentViewerRef}>
+        {/* Section TOC - Left side - sticky */}
+        {docContent && showSections && (
+          <div className="w-48 border-r border-slate-800 shrink-0 sticky top-0 self-start h-screen flex flex-col">
+            <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
+              <h3 className="text-xs font-semibold">Sections</h3>
+              <button
+                onClick={() => setShowSections(false)}
+                className="text-xs text-slate-500 hover:text-slate-300"
+                title="Hide sections"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {/* AI Summary Section */}
+              <div className="border-b border-slate-800">
+                <button
+                  onClick={() => {
+                    setSelectedSectionId(null);
+                    const summaryEl = document.querySelector('[data-section="ai-summary"]');
+                    summaryEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className={`w-full text-left px-3 py-2 text-[11px] transition-colors bg-slate-900/50 ${
+                    selectedSectionId === null
+                      ? 'text-sky-300 font-semibold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  ✨ AI Summary
+                </button>
+              </div>
+              
+              {/* Document Sections */}
+              {docContent.sections.length > 0 && (
+                <div className="p-2 space-y-0.5">
+                  {docContent.sections.map((section) => (
+                    <button
+                      key={section.id}
+                      onClick={() => handleSectionClick(section.id)}
+                      className={`w-full text-left px-2 py-1 rounded text-[11px] transition-colors ${
+                        activeSectionId === section.id
+                          ? 'bg-sky-700 text-white'
+                          : selectedSectionId === section.id
+                            ? 'bg-sky-900/60 text-sky-100'
+                            : 'hover:bg-slate-800 text-slate-300'
+                      }`}
+                      style={{ paddingLeft: `${8 + (section.level - 1) * 8}px` }}
+                    >
+                      <span className="block truncate">{section.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Content area with summary and document viewer */}
+        <div className="flex-1 flex flex-col">
+        <div data-section="ai-summary" className={`flex flex-col transition-all duration-300 relative shrink-0 border-b border-slate-800 ${
+          isSummaryExpanded ? 'flex-1' : 'h-1/4'
         }`}>
           <div className={`p-3 pb-2 flex flex-col ${
-            isSummaryExpanded ? '' : 'h-full overflow-hidden'
+            isSummaryExpanded ? 'h-full overflow-y-auto' : 'h-full overflow-y-auto'
           }`}>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 shrink-0">
               <h2 className="text-sm font-semibold">AI Summary</h2>
               {selectedDocId && (
                 <button
@@ -504,16 +722,7 @@ export default function HomePage() {
               <p className="text-xs text-slate-400">Select a document to see its summary.</p>
             )}
             
-            {selectedDocId && isSummaryLoading && (
-              <div className="flex items-center gap-2 text-slate-400 text-xs">
-                <div className="flex gap-1">
-                  <span className="animate-bounce" style={{ animationDelay: '0ms' }}>●</span>
-                  <span className="animate-bounce" style={{ animationDelay: '150ms' }}>●</span>
-                  <span className="animate-bounce" style={{ animationDelay: '300ms' }}>●</span>
-                </div>
-                <span>Generating summary...</span>
-              </div>
-            )}
+            {selectedDocId && isSummaryLoading && <SummarySkeleton />}
             
             {selectedDocId && summaryError && (
               <div className="text-xs text-red-400">
@@ -522,28 +731,30 @@ export default function HomePage() {
             )}
             
             {selectedDocId && !isSummaryLoading && summaryContent && (
-              <div ref={summaryContentRef} className={isSummaryExpanded ? 'pb-3' : 'flex-1 overflow-auto'}>
-                <div className="prose prose-invert prose-xs max-w-none text-xs
-                  prose-p:my-3 prose-p:leading-relaxed
-                  prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
-                  prose-ol:my-3 prose-ol:pl-5 prose-ol:space-y-1
-                  prose-li:my-1
-                  prose-h1:text-sm prose-h1:font-bold prose-h1:mt-4 prose-h1:mb-2
-                  prose-h2:text-xs prose-h2:font-bold prose-h2:mt-3 prose-h2:mb-1.5
-                  prose-h3:text-xs prose-h3:font-semibold prose-h3:mt-2 prose-h3:mb-1
-                  prose-code:text-[10px] prose-code:bg-slate-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
-                  prose-pre:my-3 prose-pre:bg-slate-900 prose-pre:p-2"
-                >
-                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                    {summaryContent}
-                  </ReactMarkdown>
+              <ErrorBoundary>
+                <div ref={summaryContentRef} className="flex-1">
+                  <div className="prose prose-invert prose-xs max-w-none text-xs
+                    prose-p:my-3 prose-p:leading-relaxed
+                    prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
+                    prose-ol:my-3 prose-ol:pl-5 prose-ol:space-y-1
+                    prose-li:my-1
+                    prose-h1:text-sm prose-h1:font-bold prose-h1:mt-4 prose-h1:mb-2
+                    prose-h2:text-xs prose-h2:font-bold prose-h2:mt-3 prose-h2:mb-1.5
+                    prose-h3:text-xs prose-h3:font-semibold prose-h3:mt-2 prose-h3:mb-1
+                    prose-code:text-[10px] prose-code:bg-slate-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+                    prose-pre:my-3 prose-pre:bg-slate-900 prose-pre:p-2"
+                  >
+                    <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                      {summaryContent}
+                    </ReactMarkdown>
+                  </div>
                 </div>
-              </div>
+              </ErrorBoundary>
             )}
           </div>
           
           {/* Divider with expand/collapse button */}
-          <div className="relative h-px bg-slate-800">
+          <div className="relative h-px bg-slate-800 shrink-0">
             {isSummaryOverflowing && (
               <button
                 onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
@@ -564,19 +775,30 @@ export default function HomePage() {
             )}
           </div>
         </div>
-        <div className="shrink-0 p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold">Document Viewer</h2>
-            {docContent && (
-              <span className="text-[10px] text-slate-500">
-                {docContent.path} · {docContent.meta.fileType?.toUpperCase()} ·{" "}
-                {docContent.meta.size} chars
-              </span>
-            )}
-          </div>
-          {isDocLoading && (
-            <p className="text-xs text-slate-500">Loading document…</p>
-          )}
+        
+        {/* Document viewer */}
+        <div className="flex-1 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold">Document Viewer</h2>
+                {docContent && !showSections && (
+                  <button
+                    onClick={() => setShowSections(true)}
+                    className="text-xs px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
+                    title="Show sections"
+                  >
+                    📑 Sections
+                  </button>
+                )}
+              </div>
+              {docContent && (
+                <span className="text-[10px] text-slate-500">
+                  {docContent.path} · {docContent.meta.fileType?.toUpperCase()} ·{" "}
+                  {docContent.meta.size} chars
+                </span>
+              )}
+            </div>
+          {isDocLoading && <DocumentViewerSkeleton />}
           {docError && (
             <p className="text-xs text-red-400">Failed to load document: {docError}</p>
           )}
@@ -586,10 +808,66 @@ export default function HomePage() {
             </p>
           )}
           {!isDocLoading && !docError && docContent && (
-            <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono">
-              {docContent.rawText}
-            </pre>
+            <ErrorBoundary>
+              <div ref={documentContentRef} className="prose prose-invert prose-sm max-w-none
+              prose-p:my-3 prose-p:leading-relaxed
+              prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
+              prose-ol:my-3 prose-ol:pl-5 prose-ol:space-y-1
+              prose-li:my-1
+              prose-h1:text-lg prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-3
+              prose-h2:text-base prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-2
+              prose-h3:text-sm prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
+              prose-code:text-xs prose-code:bg-slate-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+              prose-pre:my-4 prose-pre:bg-slate-900 prose-pre:p-4
+              prose-strong:font-semibold
+              prose-a:text-sky-400 prose-a:underline"
+            >
+              <ReactMarkdown 
+                rehypePlugins={[rehypeRaw]}
+                components={{
+                  code({ className, children, ...props }: any) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    const codeString = String(children).replace(/\n$/, '');
+                    const isInline = !className;
+                    
+                    return !isInline && match ? (
+                      <div className="relative group">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(codeString);
+                          }}
+                          className="absolute right-2 top-2 px-2 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          Copy
+                        </button>
+                        <SyntaxHighlighter
+                          style={vscDarkPlus as any}
+                          language={match[1]}
+                          PreTag="div"
+                          customStyle={{
+                            margin: 0,
+                            borderRadius: '0.375rem',
+                            fontSize: '0.75rem',
+                          }}
+                          {...props}
+                        >
+                          {codeString}
+                        </SyntaxHighlighter>
+                      </div>
+                    ) : (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {docContent.rawText}
+              </ReactMarkdown>
+            </div>
+            </ErrorBoundary>
           )}
+        </div>
         </div>
       </section>
 
@@ -601,11 +879,12 @@ export default function HomePage() {
 
       {/* Right: chat panel */}
       <section className="p-3 flex flex-col overflow-hidden" style={{ width: `${rightPanelWidth}%` }}>
-        <div className="flex items-center justify-between mb-2 shrink-0">
-          <h2 className="text-sm font-semibold">Chat</h2>
-          <div className="flex gap-2">
-            {chatMessages.length > 0 && (
-              <>
+        <div className="flex flex-col gap-1 mb-2 shrink-0">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Chat</h2>
+            <div className="flex gap-2">
+              {chatMessages.length > 0 && (
+                <>
                 <button
                   onClick={handleRegenerateResponse}
                   disabled={isStreaming || chatMessages.length < 2}
@@ -625,6 +904,23 @@ export default function HomePage() {
               </>
             )}
           </div>
+          </div>
+          {selectedSectionId && docContent && (
+            <div className="text-[10px] text-slate-400 bg-slate-800/50 px-2 py-1 rounded flex items-center gap-1">
+              <span>📍</span>
+              <span>Asking about section:</span>
+              <span className="font-semibold text-sky-400">
+                {docContent.sections.find(s => s.id === selectedSectionId)?.title}
+              </span>
+              <button
+                onClick={() => setSelectedSectionId(null)}
+                className="ml-auto text-slate-500 hover:text-slate-300"
+                title="Clear section context"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
         <div 
           ref={chatContainerRef}
@@ -760,6 +1056,14 @@ export default function HomePage() {
           </div>
         </form>
       </section>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        settings={settings}
+        onSave={handleSaveSettings}
+      />
     </main>
   );
 }
@@ -785,6 +1089,7 @@ interface DocTreeNodeProps {
   selectedDocId: string | null;
   onSelectDoc: (id: string) => void;
   filterQuery?: string;
+  searchResults?: {docId: string, matches: number}[];
 }
 
 function DocTreeNode({
@@ -795,6 +1100,7 @@ function DocTreeNode({
   selectedDocId,
   onSelectDoc,
   filterQuery,
+  searchResults,
 }: DocTreeNodeProps) {
   const isFolder = node.type === "folder";
   const isExpanded = filterQuery?.trim()
@@ -806,6 +1112,7 @@ function DocTreeNode({
     ? (node.name.toLowerCase().includes(lowerQuery) ||
         (node.path || "").toLowerCase().includes(lowerQuery))
     : false;
+  const searchMatch = searchResults?.find(r => r.docId === node.id);
 
   const paddingLeft = 4 + depth * 10;
 
@@ -838,6 +1145,7 @@ function DocTreeNode({
                 selectedDocId={selectedDocId}
                 onSelectDoc={onSelectDoc}
                 filterQuery={filterQuery}
+                searchResults={searchResults}
               />
             ))}
           </div>
@@ -853,7 +1161,7 @@ function DocTreeNode({
       className={`w-full flex flex-col px-2 py-1 rounded-md transition-colors ${
         isActive
           ? "bg-sky-700/80 text-white"
-          : isMatch
+          : isMatch || searchMatch
             ? "bg-sky-900/60 text-sky-100"
             : "hover:bg-slate-900/70"
       }`}
@@ -862,6 +1170,11 @@ function DocTreeNode({
       <div className="flex items-center gap-1.5">
         <span className="text-[11px] text-sky-300">📄</span>
         <span className="block truncate text-[12px]">{node.name}</span>
+        {searchMatch && (
+          <span className="ml-auto text-[9px] bg-amber-600 px-1.5 py-0.5 rounded-full">
+            {searchMatch.matches}
+          </span>
+        )}
       </div>
       <span className="block text-[10px] text-slate-500 truncate ml-4">
         {node.path}
