@@ -399,7 +399,7 @@ export default function HomePage() {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value);
+          const chunk = decoder.decode(value, { stream: true });
           accumulatedContent += chunk;
           setSummaryContent(accumulatedContent);
         }
@@ -773,15 +773,13 @@ export default function HomePage() {
               <p className="text-xs text-slate-600">Select a document to see its summary.</p>
             )}
             
-            {selectedDocId && isSummaryLoading && <SummarySkeleton />}
-            
             {selectedDocId && summaryError && (
               <div className="text-xs text-red-600">
                 Error: {summaryError}
               </div>
             )}
             
-            {selectedDocId && !isSummaryLoading && summaryContent && (
+            {selectedDocId && summaryContent && (
               <ErrorBoundary>
                 <div ref={summaryContentRef}>
                   <div className="prose prose-slate prose-xs max-w-none text-xs
@@ -804,6 +802,8 @@ export default function HomePage() {
                 </div>
               </ErrorBoundary>
             )}
+            
+            {selectedDocId && isSummaryLoading && !summaryContent && <SummarySkeleton />}
           </div>
         </div>
         

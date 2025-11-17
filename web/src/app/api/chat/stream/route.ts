@@ -203,7 +203,16 @@ function buildSystemPrompt(input: {
   switch (input.mode) {
     case "summary":
       parts.push(
-        "User is asking for a summary. Provide a clear, high-level summary with key points.",
+        `Provide a comprehensive summary with the following structure:
+        
+1. **Summary**: A clear, concise overview of the main concepts and key points.
+
+2. **Likely Questions & Answers**: Generate  all possible and relevant questions and detailed answers. Format each Q&A as:
+
+**Q: [Question here]?**
+**A:** [Detailed answer here]
+
+Use proper markdown formatting with headings, bullet points, and code blocks where appropriate.`,
       );
       break;
     case "key_points":
