@@ -46,7 +46,6 @@ export default function HomePage() {
   const [summaryContent, setSummaryContent] = useState<string>("");
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   
   const [showSections, setShowSections] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
@@ -62,7 +61,6 @@ export default function HomePage() {
   const summaryContentRef = useRef<HTMLDivElement>(null);
   const documentViewerRef = useRef<HTMLDivElement>(null);
   const documentContentRef = useRef<HTMLDivElement>(null);
-  const [isSummaryOverflowing, setIsSummaryOverflowing] = useState(false);
 
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -90,17 +88,6 @@ export default function HomePage() {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatMessages, shouldAutoScroll]);
-
-  // Detect if summary content is overflowing
-  useEffect(() => {
-    if (summaryContentRef.current && summaryContent && !isSummaryLoading) {
-      const element = summaryContentRef.current;
-      const isOverflowing = element.scrollHeight > element.clientHeight;
-      setIsSummaryOverflowing(isOverflowing);
-    } else {
-      setIsSummaryOverflowing(false);
-    }
-  }, [summaryContent, isSummaryLoading, isSummaryExpanded]);
 
   // Detect manual scroll to disable auto-scroll
   const handleScroll = () => {
@@ -193,7 +180,7 @@ export default function HomePage() {
     }
   };
 
-  // Track active section on scroll
+  // Track active section on scroll and auto-scroll TOC
   useEffect(() => {
     if (!documentViewerRef.current || !documentContentRef.current || !docContent || docContent.sections.length === 0) return;
 
@@ -206,6 +193,12 @@ export default function HomePage() {
             const section = docContent.sections.find(s => s.title === sectionTitle);
             if (section) {
               setActiveSectionId(section.id);
+              
+              // Auto-scroll the active section into view in the TOC
+              const sectionButton = document.querySelector(`[data-section-id="${section.id}"]`);
+              if (sectionButton) {
+                sectionButton.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+              }
             }
           }
         });
@@ -639,10 +632,10 @@ export default function HomePage() {
       />
 
       {/* Center: summary (top 25%) + raw viewer (bottom 75%) */}
-      <section className="flex-1 flex border-r border-slate-800 overflow-y-auto" ref={documentViewerRef}>
+      <section className="flex-1 flex border-r border-slate-800 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent hover:scrollbar-thumb-slate-600" ref={documentViewerRef}>
         {/* Section TOC - Left side - sticky */}
         {docContent && showSections && (
-          <div className="w-48 border-r border-slate-800 shrink-0 sticky top-0 self-start h-screen flex flex-col">
+          <div className="w-48 border-r border-slate-800 shrink-0 sticky top-0 self-start h-screen flex flex-col overflow-hidden">
             <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
               <h3 className="text-xs font-semibold">Sections</h3>
               <button
@@ -653,7 +646,7 @@ export default function HomePage() {
                 ✕
               </button>
             </div>
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent hover:scrollbar-thumb-slate-600">
               {/* AI Summary Section */}
               <div className="border-b border-slate-800">
                 <button
@@ -678,6 +671,7 @@ export default function HomePage() {
                   {docContent.sections.map((section) => (
                     <button
                       key={section.id}
+                      data-section-id={section.id}
                       onClick={() => handleSectionClick(section.id)}
                       className={`w-full text-left px-2 py-1 rounded text-[11px] transition-colors ${
                         activeSectionId === section.id
@@ -699,14 +693,10 @@ export default function HomePage() {
         
         {/* Content area with summary and document viewer */}
         <div className="flex-1 flex flex-col">
-        <div data-section="ai-summary" className={`flex flex-col transition-all duration-300 relative shrink-0 border-b border-slate-800 ${
-          isSummaryExpanded ? 'flex-1' : 'h-1/4'
-        }`}>
-          <div className={`p-3 pb-2 flex flex-col ${
-            isSummaryExpanded ? 'h-full overflow-y-auto' : 'h-full overflow-y-auto'
-          }`}>
+        <div data-section="ai-summary" className="flex flex-col shrink-0 border-b-2 border-sky-700/50 bg-slate-900/30">
+          <div className="p-3 pb-2 flex flex-col">
             <div className="flex items-center justify-between mb-2 shrink-0">
-              <h2 className="text-sm font-semibold">AI Summary</h2>
+              <h2 className="text-sm font-semibold text-sky-300">✨ AI Summary</h2>
               {selectedDocId && (
                 <button
                   onClick={handleGenerateSummary}
@@ -732,7 +722,7 @@ export default function HomePage() {
             
             {selectedDocId && !isSummaryLoading && summaryContent && (
               <ErrorBoundary>
-                <div ref={summaryContentRef} className="flex-1">
+                <div ref={summaryContentRef}>
                   <div className="prose prose-invert prose-xs max-w-none text-xs
                     prose-p:my-3 prose-p:leading-relaxed
                     prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
@@ -752,35 +742,13 @@ export default function HomePage() {
               </ErrorBoundary>
             )}
           </div>
-          
-          {/* Divider with expand/collapse button */}
-          <div className="relative h-px bg-slate-800 shrink-0">
-            {isSummaryOverflowing && (
-              <button
-                onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-full transition-colors shadow-lg flex items-center gap-1"
-              >
-                {isSummaryExpanded ? (
-                  <>
-                    <span>↑</span>
-                    <span>Collapse</span>
-                  </>
-                ) : (
-                  <>
-                    <span>↓</span>
-                    <span>Expand</span>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
         </div>
         
         {/* Document viewer */}
-        <div className="flex-1 p-3">
+        <div className="flex-1 p-3 bg-slate-950">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold">Document Viewer</h2>
+                <h2 className="text-sm font-semibold text-slate-200">📄 Document Viewer</h2>
                 {docContent && !showSections && (
                   <button
                     onClick={() => setShowSections(true)}
