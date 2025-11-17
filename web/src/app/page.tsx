@@ -20,6 +20,7 @@ export default function HomePage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [docFilter, setDocFilter] = useState("");
 
   // Initial docs load.
   useEffect(() => {
@@ -155,6 +156,44 @@ export default function HomePage() {
       setIsStreaming(false);
     }
   };
+
+  const filterDocs = (nodes: DocNode[], query: string): DocNode[] => {
+    if (!query.trim()) return nodes;
+    const lowerQuery = query.toLowerCase();
+
+    const matches = (node: DocNode): boolean => {
+      const fullPath = node.path || node.name;
+      return (
+        node.name.toLowerCase().includes(lowerQuery) ||
+        fullPath.toLowerCase().includes(lowerQuery)
+      );
+    };
+
+    const recurse = (node: DocNode): DocNode | null => {
+      if (node.type === "file") {
+        return matches(node) ? node : null;
+      }
+
+      const filteredChildren = (node.children || [])
+        .map(recurse)
+        .filter((child): child is DocNode => child !== null);
+
+      if (filteredChildren.length > 0 || matches(node)) {
+        return {
+          ...node,
+          children: filteredChildren,
+        };
+      }
+
+      return null;
+    };
+
+    return nodes
+      .map(recurse)
+      .filter((node): node is DocNode => node !== null);
+  };
+
+  const visibleDocs = filterDocs(docs, docFilter);
   const toggleFolder = (id: string) => {
     setExpandedFolders((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -162,19 +201,28 @@ export default function HomePage() {
   return (
     <main className="h-screen w-screen flex bg-slate-950 text-slate-50">
       {/* Left: document browser */}
-      <section className="w-1/5 border-r border-slate-800 p-3 flex flex-col">
-        <h2 className="text-sm font-semibold mb-2">Documents</h2>
-        <div className="flex-1 text-xs text-slate-200 overflow-auto">
+      <section className="w-1/5 border-r border-slate-800 flex flex-col bg-slate-950/60">
+        <div className="border-b border-slate-900 px-3 py-2">
+          <h2 className="text-sm font-semibold mb-2">Documents</h2>
+          <input
+            type="text"
+            value={docFilter}
+            onChange={(e) => setDocFilter(e.target.value)}
+            placeholder="Filter by name or path…"
+            className="w-full rounded bg-slate-900/80 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          />
+        </div>
+        <div className="flex-1 text-xs text-slate-200 overflow-auto p-3">
           {isDocsLoading && <p className="text-slate-500">Loading documents…</p>}
           {docsError && (
             <p className="text-red-400">Failed to load docs: {docsError}</p>
           )}
-          {!isDocsLoading && !docsError && docs.length === 0 && (
+          {!isDocsLoading && !docsError && visibleDocs.length === 0 && (
             <p className="text-slate-500">No documents found.</p>
           )}
-          {!isDocsLoading && !docsError && docs.length > 0 && (
+          {!isDocsLoading && !docsError && visibleDocs.length > 0 && (
             <div className="space-y-1">
-              {docs.map((node) => (
+              {visibleDocs.map((node) => (
                 <DocTreeNode
                   key={node.id}
                   node={node}
@@ -183,6 +231,7 @@ export default function HomePage() {
                   onToggleFolder={toggleFolder}
                   selectedDocId={selectedDocId}
                   onSelectDoc={setSelectedDocId}
+                  filterQuery={docFilter}
                 />
               ))}
             </div>
@@ -291,6 +340,7 @@ interface DocTreeNodeProps {
   onToggleFolder: (id: string) => void;
   selectedDocId: string | null;
   onSelectDoc: (id: string) => void;
+  filterQuery?: string;
 }
 
 function DocTreeNode({
@@ -300,10 +350,18 @@ function DocTreeNode({
   onToggleFolder,
   selectedDocId,
   onSelectDoc,
+  filterQuery,
 }: DocTreeNodeProps) {
   const isFolder = node.type === "folder";
-  const isExpanded = !!expanded[node.id];
+  const isExpanded = filterQuery?.trim()
+    ? true
+    : !!expanded[node.id];
   const isActive = node.id === selectedDocId;
+  const lowerQuery = filterQuery?.trim().toLowerCase() ?? "";
+  const isMatch = lowerQuery
+    ? (node.name.toLowerCase().includes(lowerQuery) ||
+        (node.path || "").toLowerCase().includes(lowerQuery))
+    : false;
 
   const paddingLeft = 4 + depth * 10;
 
@@ -313,13 +371,16 @@ function DocTreeNode({
         <button
           type="button"
           onClick={() => onToggleFolder(node.id)}
-          className="w-full flex items-center gap-1 px-2 py-1 rounded-md hover:bg-slate-800"
+          className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-900/70 ${
+            isMatch ? "bg-amber-900/40" : ""
+          }`}
           style={{ paddingLeft }}
         >
           <span className="text-[10px] text-slate-400">
             {isExpanded ? "▾" : "▸"}
           </span>
-          <span className="truncate font-medium">{node.name}</span>
+          <span className="text-[11px] text-amber-300">📁</span>
+          <span className="truncate font-medium text-slate-100">{node.name}</span>
         </button>
         {isExpanded && node.children && (
           <div className="mt-0.5 space-y-0.5">
@@ -332,6 +393,7 @@ function DocTreeNode({
                 onToggleFolder={onToggleFolder}
                 selectedDocId={selectedDocId}
                 onSelectDoc={onSelectDoc}
+                filterQuery={filterQuery}
               />
             ))}
           </div>
@@ -344,11 +406,22 @@ function DocTreeNode({
     <button
       type="button"
       onClick={() => onSelectDoc(node.id)}
-      className={`w-full text-left px-2 py-1 rounded-md transition-colors ${isActive ? "bg-sky-700 text-white" : "hover:bg-slate-800"}`}
+      className={`w-full flex flex-col px-2 py-1 rounded-md transition-colors ${
+        isActive
+          ? "bg-sky-700/80 text-white"
+          : isMatch
+            ? "bg-sky-900/60 text-sky-100"
+            : "hover:bg-slate-900/70"
+      }`}
       style={{ paddingLeft }}
     >
-      <span className="block truncate">{node.name}</span>
-      <span className="block text-[10px] text-slate-400">{node.path}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] text-sky-300">📄</span>
+        <span className="block truncate text-[12px]">{node.name}</span>
+      </div>
+      <span className="block text-[10px] text-slate-500 truncate ml-4">
+        {node.path}
+      </span>
     </button>
   );
 }
