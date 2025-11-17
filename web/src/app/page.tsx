@@ -2,6 +2,8 @@
 
 // web/src/app/page.tsx
 import React, { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
 import type { ChatMessage, DocNode, DocumentContent } from "@/lib/types";
 
 const DEFAULT_CONVERSATION_ID = "demo-conversation";
@@ -280,7 +282,7 @@ export default function HomePage() {
       {/* Right: chat panel */}
       <section className="w-1/4 p-3 flex flex-col">
         <h2 className="text-sm font-semibold mb-2">Chat</h2>
-        <div className="flex-1 border border-slate-800 rounded-md p-2 mb-2 overflow-auto space-y-1">
+        <div className="flex-1 border border-slate-800 rounded-md p-3 mb-2 overflow-auto space-y-3">
           {chatMessages.length === 0 && (
             <p className="text-xs text-slate-500">
               Start a conversation about the selected document.
@@ -289,12 +291,28 @@ export default function HomePage() {
           {chatMessages.map((msg, index) => (
             <div
               key={`${msg.role}-${msg.createdAt}-${index}`}
-              className={`text-xs px-2 py-1 rounded-md max-w-full break-words ${msg.role === "user" ? "bg-sky-700/60 self-end ml-6" : "bg-slate-800 mr-6"}`}
+              className={`px-3 py-2 rounded-md ${msg.role === "user" ? "bg-sky-700/60 ml-8" : "bg-slate-800/80 mr-2"}`}
             >
-              <span className="block text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">
+              <span className="block text-[10px] uppercase tracking-wider text-slate-400 mb-1.5 font-semibold">
                 {msg.role === "user" ? "You" : "Assistant"}
               </span>
-              <span>{msg.content}</span>
+              {msg.role === "assistant" ? (
+                <div className="prose prose-invert prose-xs max-w-none text-xs
+                  prose-p:my-4 prose-p:leading-relaxed
+                  prose-ul:my-4 prose-ul:pl-6 prose-ul:space-y-2
+                  prose-ol:my-4 prose-ol:pl-6 prose-ol:space-y-2
+                  prose-li:leading-relaxed prose-li:pl-2
+                  prose-headings:mt-6 prose-headings:mb-3 prose-headings:font-bold prose-headings:text-xs
+                  prose-h1:text-xs prose-h2:text-xs prose-h3:text-xs
+                  prose-pre:my-4 prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-slate-700 prose-pre:text-xs
+                  prose-code:text-sky-300 prose-code:bg-slate-900/70 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs
+                  prose-strong:font-semibold
+                  prose-a:text-sky-400 prose-a:underline">
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{msg.content}</ReactMarkdown>
+                </div>
+              ) : (
+                <span className="text-xs leading-relaxed">{msg.content}</span>
+              )}
             </div>
           ))}
         </div>
