@@ -1,7 +1,7 @@
 "use client";
 
 // web/src/app/page.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { ChatMessage, DocNode, DocumentContent } from "@/lib/types";
 
 const DEFAULT_CONVERSATION_ID = "demo-conversation";
@@ -19,9 +19,7 @@ export default function HomePage() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-
-  // Flatten doc tree into a simple list of files for the initial UI.
-  const flatFiles = useMemo(() => flattenDocs(docs), [docs]);
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
 
   // Initial docs load.
   useEffect(() => {
@@ -36,7 +34,7 @@ export default function HomePage() {
         const data = (await res.json()) as { docs: DocNode[] };
         setDocs(data.docs);
         // Auto-select the first file if available to make the UI feel alive.
-        const firstFile = flattenDocs(data.docs)[0];
+        const firstFile = findFirstFile(data.docs);
         if (firstFile) {
           setSelectedDocId(firstFile.id);
         }
@@ -62,7 +60,8 @@ export default function HomePage() {
       try {
         setIsDocLoading(true);
         setDocError(null);
-        const res = await fetch(`/api/docs/${selectedDocId}/content`);
+        const encodedId = encodeURIComponent(selectedDocId);
+        const res = await fetch(`/api/docs/${encodedId}`);
         if (!res.ok) {
           throw new Error(`Failed to load document: ${res.status}`);
         }
@@ -156,37 +155,38 @@ export default function HomePage() {
       setIsStreaming(false);
     }
   };
+  const toggleFolder = (id: string) => {
+    setExpandedFolders((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   return (
     <main className="h-screen w-screen flex bg-slate-950 text-slate-50">
       {/* Left: document browser */}
       <section className="w-1/5 border-r border-slate-800 p-3 flex flex-col">
         <h2 className="text-sm font-semibold mb-2">Documents</h2>
-        <div className="flex-1 text-xs text-slate-200 space-y-1 overflow-auto">
+        <div className="flex-1 text-xs text-slate-200 overflow-auto">
           {isDocsLoading && <p className="text-slate-500">Loading documents…</p>}
           {docsError && (
             <p className="text-red-400">Failed to load docs: {docsError}</p>
           )}
-          {!isDocsLoading && !docsError && flatFiles.length === 0 && (
+          {!isDocsLoading && !docsError && docs.length === 0 && (
             <p className="text-slate-500">No documents found.</p>
           )}
-          {!isDocsLoading &&
-            !docsError &&
-            flatFiles.map((file) => {
-              const isActive = file.id === selectedDocId;
-              return (
-                <button
-                  key={file.id}
-                  type="button"
-                  onClick={() => setSelectedDocId(file.id)}
-                  className={`w-full text-left px-2 py-1 rounded-md transition-colors ${isActive ? "bg-sky-700 text-white" : "hover:bg-slate-800"}`}
-                >
-                  <span className="block truncate">{file.name}</span>
-                  <span className="block text-[10px] text-slate-400">
-                    {file.path}
-                  </span>
-                </button>
-              );
-            })}
+          {!isDocsLoading && !docsError && docs.length > 0 && (
+            <div className="space-y-1">
+              {docs.map((node) => (
+                <DocTreeNode
+                  key={node.id}
+                  node={node}
+                  depth={0}
+                  expanded={expandedFolders}
+                  onToggleFolder={toggleFolder}
+                  selectedDocId={selectedDocId}
+                  onSelectDoc={setSelectedDocId}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -271,18 +271,84 @@ export default function HomePage() {
   );
 }
 
-function flattenDocs(nodes: DocNode[]): DocNode[] {
-  const result: DocNode[] = [];
-
-  const visit = (node: DocNode) => {
+function findFirstFile(nodes: DocNode[]): DocNode | null {
+  for (const node of nodes) {
     if (node.type === "file") {
-      result.push(node);
+      return node;
     }
     if (node.children) {
-      node.children.forEach(visit);
+      const found = findFirstFile(node.children);
+      if (found) return found;
     }
-  };
+  }
+  return null;
+}
 
-  nodes.forEach(visit);
-  return result;
+interface DocTreeNodeProps {
+  node: DocNode;
+  depth: number;
+  expanded: Record<string, boolean>;
+  onToggleFolder: (id: string) => void;
+  selectedDocId: string | null;
+  onSelectDoc: (id: string) => void;
+}
+
+function DocTreeNode({
+  node,
+  depth,
+  expanded,
+  onToggleFolder,
+  selectedDocId,
+  onSelectDoc,
+}: DocTreeNodeProps) {
+  const isFolder = node.type === "folder";
+  const isExpanded = !!expanded[node.id];
+  const isActive = node.id === selectedDocId;
+
+  const paddingLeft = 4 + depth * 10;
+
+  if (isFolder) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => onToggleFolder(node.id)}
+          className="w-full flex items-center gap-1 px-2 py-1 rounded-md hover:bg-slate-800"
+          style={{ paddingLeft }}
+        >
+          <span className="text-[10px] text-slate-400">
+            {isExpanded ? "▾" : "▸"}
+          </span>
+          <span className="truncate font-medium">{node.name}</span>
+        </button>
+        {isExpanded && node.children && (
+          <div className="mt-0.5 space-y-0.5">
+            {node.children.map((child) => (
+              <DocTreeNode
+                key={child.id}
+                node={child}
+                depth={depth + 1}
+                expanded={expanded}
+                onToggleFolder={onToggleFolder}
+                selectedDocId={selectedDocId}
+                onSelectDoc={onSelectDoc}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelectDoc(node.id)}
+      className={`w-full text-left px-2 py-1 rounded-md transition-colors ${isActive ? "bg-sky-700 text-white" : "hover:bg-slate-800"}`}
+      style={{ paddingLeft }}
+    >
+      <span className="block truncate">{node.name}</span>
+      <span className="block text-[10px] text-slate-400">{node.path}</span>
+    </button>
+  );
 }
