@@ -46,4 +46,9 @@ export interface ChatRequestBody {
   sectionId?: string | null;
   mode: ChatMode;
   message: string;
+  modelConfig?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  };
 }

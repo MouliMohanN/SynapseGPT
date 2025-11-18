@@ -32,7 +32,7 @@ function formatAssistantResponse(content: string): string {
 
 export async function POST(request: Request) {
   const body = (await request.json()) as ChatRequestBody;
-  const { conversationId, docId, sectionId, mode, message } = body;
+  const { conversationId, docId, sectionId, mode, message, modelConfig } = body;
 
   if (!conversationId || !message) {
     return NextResponse.json(
@@ -79,6 +79,12 @@ export async function POST(request: Request) {
       ...history.map((msg) => ({ role: msg.role, content: msg.content })),
       { role: "user", content: message },
     ],
+    options: {
+      temperature: modelConfig?.temperature ?? 0.7,
+      top_p: modelConfig?.topP ?? 0.9,
+      num_predict: modelConfig?.maxTokens ?? -1,
+      repeat_penalty: 1.1,
+    },
   } as const;
 
   const encoder = new TextEncoder();
@@ -184,7 +190,7 @@ function buildSystemPrompt(input: {
   const parts: string[] = [];
 
   parts.push(
-    "You are SynapseGPT, a local-first documentation assistant. Answer using only the information from the provided document content and be concise.",
+    "You are SynapseGPT, a local-first documentation assistant. Answer using only the information from the provided document content and be detailed.",
   );
 
   if (input.documentContext) {
@@ -203,16 +209,7 @@ function buildSystemPrompt(input: {
   switch (input.mode) {
     case "summary":
       parts.push(
-        `Provide a comprehensive summary with the following structure:
-        
-1. **Summary**: A clear, concise overview of the main concepts and key points.
-
-2. **Likely Questions & Answers**: Generate  all possible and relevant questions and detailed answers. Format each Q&A as:
-
-**Q: [Question here]?**
-**A:** [Detailed answer here]
-
-Use proper markdown formatting with headings, bullet points, and code blocks where appropriate.`,
+        `Generate a summary of the document. Follow the user's specific instructions for detail level, tone, and question generation. Use proper markdown formatting with headings, bullet points, and code blocks where appropriate.`,
       );
       break;
     case "key_points":
