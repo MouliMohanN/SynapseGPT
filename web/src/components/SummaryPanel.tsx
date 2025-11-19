@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
+import remarkGfm from 'remark-gfm';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SummarySkeleton } from '@/components/Skeleton';
 
@@ -74,7 +75,33 @@ export function SummaryPanel({
                 prose-strong:text-slate-900 prose-strong:font-semibold
                 prose-a:text-purple-600 prose-a:underline prose-a:hover:text-purple-700"
               >
-                <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={{
+                    table: (props) => (
+                      <div className="overflow-x-auto my-3">
+                        <table
+                          {...props}
+                          className="w-full border border-slate-200 text-left text-[11px]"
+                        />
+                      </div>
+                    ),
+                    thead: (props) => <thead {...props} className="bg-slate-100" />,
+                    th: (props) => (
+                      <th
+                        {...props}
+                        className="px-2 py-1 border border-slate-200 font-semibold"
+                      />
+                    ),
+                    td: (props) => (
+                      <td
+                        {...props}
+                        className="px-2 py-1 border border-slate-200 align-top"
+                      />
+                    ),
+                  }}
+                >
                   {summaryContent}
                 </ReactMarkdown>
               </div>
