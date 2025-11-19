@@ -31,12 +31,10 @@ export interface DocumentContent {
   };
 }
 
-export type ChatMode = "question" | "summary" | "key_points" | "faqs";
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
-  mode?: ChatMode;
   createdAt: string;
 }
 
@@ -44,7 +42,6 @@ export interface ChatRequestBody {
   conversationId: string;
   docId: string;
   sectionId?: string | null;
-  mode: ChatMode;
   message: string;
   modelConfig?: {
     temperature?: number;

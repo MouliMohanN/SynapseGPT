@@ -232,7 +232,6 @@ export default function HomePage() {
     const userMessage: ChatMessage = {
       role: "user",
       content: chatInput.trim(),
-      mode: "question",
       createdAt: new Date().toISOString(),
     };
 
@@ -246,7 +245,6 @@ export default function HomePage() {
     const initialAssistant: ChatMessage = {
       role: "assistant",
       content: "",
-      mode: "question",
       createdAt: new Date().toISOString(),
     };
     setChatMessages((prev) => [...prev, initialAssistant]);
@@ -264,7 +262,6 @@ export default function HomePage() {
           conversationId: DEFAULT_CONVERSATION_ID,
           docId: selectedDocId,
           sectionId: selectedSectionId,
-          mode: "question",
           message: userMessage.content,
           modelConfig: {
             temperature: settings.temperature,
@@ -320,7 +317,6 @@ export default function HomePage() {
         const errorAssistant: ChatMessage = {
           role: "assistant",
           content: `Error: ${message}`,
-          mode: "question",
           createdAt: new Date().toISOString(),
         };
         setChatMessages((prev) => [...prev.slice(0, assistantIndex), errorAssistant]);
@@ -433,7 +429,6 @@ export default function HomePage() {
           conversationId: "summary-" + selectedDocId,
           docId: selectedDocId,
           sectionId: null,
-          mode: "summary",
           message: customMessage,
           modelConfig: {
             temperature: config.temperature,
