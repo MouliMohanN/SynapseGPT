@@ -9,6 +9,7 @@ import { ContentPanel } from "@/components/home/ContentPanel";
 import { ChatPanel } from "@/components/home/ChatPanel";
 import { AppHeader } from "@/components/home/AppHeader";
 import { AboutModal } from "@/components/home/AboutModal";
+import { SummarySettingsModal } from "@/components/home/SummarySettingsModal";
 
 const DEFAULT_CONVERSATION_ID = "demo-conversation";
 const CHAT_STORAGE_KEY = "synapsegpt-chat-history";
@@ -718,219 +719,19 @@ export default function HomePage() {
         onSave={handleSaveSettings}
       />
 
-      {/* AI Summary Settings Modal */}
-      {showSummarySettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowSummarySettings(false)}>
-          <div 
-            className="bg-white border border-slate-200 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">AI Summary Settings</h2>
-              <button
-                onClick={() => setShowSummarySettings(false)}
-                className="text-slate-500 hover:text-slate-700 text-xl leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Speed Preset */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Speed Preset</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSummaryPreset("quick")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryPreset === "quick"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
-                    }`}
-                  >
-                    ⚡ Quick
-                    <div className="text-[9px] opacity-75 mt-0.5">512 tokens</div>
-                  </button>
-                  <button
-                    onClick={() => setSummaryPreset("balanced")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryPreset === "balanced"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
-                    }`}
-                  >
-                    ⚖️ Balanced
-                    <div className="text-[9px] opacity-75 mt-0.5">1536 tokens</div>
-                  </button>
-                  <button
-                    onClick={() => setSummaryPreset("deep")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryPreset === "deep"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
-                    }`}
-                  >
-                    🔬 Deep
-                    <div className="text-[9px] opacity-75 mt-0.5">3072 tokens</div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Detail Level */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Detail Level</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSummaryDetailLevel("overview")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryDetailLevel === "overview"
-                        ? "bg-amber-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
-                    }`}
-                  >
-                    Overview
-                  </button>
-                  <button
-                    onClick={() => setSummaryDetailLevel("detailed")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryDetailLevel === "detailed"
-                        ? "bg-amber-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
-                    }`}
-                  >
-                    Detailed
-                  </button>
-                  <button
-                    onClick={() => setSummaryDetailLevel("comprehensive")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryDetailLevel === "comprehensive"
-                        ? "bg-amber-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
-                    }`}
-                  >
-                    Comprehensive
-                  </button>
-                </div>
-              </div>
-
-              {/* Tone */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Writing Tone</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSummaryTone("professional")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryTone === "professional"
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
-                    }`}
-                  >
-                    📊 Professional
-                  </button>
-                  <button
-                    onClick={() => setSummaryTone("casual")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryTone === "casual"
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
-                    }`}
-                  >
-                    💬 Casual
-                  </button>
-                  <button
-                    onClick={() => setSummaryTone("tutorial")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryTone === "tutorial"
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
-                    }`}
-                  >
-                    📚 Tutorial
-                  </button>
-                </div>
-              </div>
-
-              {/* Questions */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">
-                  Questions: {summaryQuestions === -1 ? 'All (LLM decides)' : summaryQuestions === 0 ? 'None' : summaryQuestions}
-                </label>
-                <div className="flex gap-2 mb-2">
-                  <button
-                    onClick={() => setSummaryQuestions(0)}
-                    className={`px-3 py-1.5 text-xs rounded transition-all ${
-                      summaryQuestions === 0
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
-                    }`}
-                  >
-                    None
-                  </button>
-                  <button
-                    onClick={() => setSummaryQuestions(5)}
-                    className={`px-3 py-1.5 text-xs rounded transition-all ${
-                      summaryQuestions === 5
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
-                    }`}
-                  >
-                    Few (5)
-                  </button>
-                  <button
-                    onClick={() => setSummaryQuestions(10)}
-                    className={`px-3 py-1.5 text-xs rounded transition-all ${
-                      summaryQuestions === 10
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
-                    }`}
-                  >
-                    Many (10)
-                  </button>
-                  <button
-                    onClick={() => setSummaryQuestions(-1)}
-                    className={`px-3 py-1.5 text-xs rounded transition-all ${
-                      summaryQuestions === -1
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
-                    }`}
-                  >
-                    All
-                  </button>
-                </div>
-                {summaryQuestions > 0 && summaryQuestions !== -1 && (
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    step="1"
-                    value={summaryQuestions}
-                    onChange={(e) => setSummaryQuestions(parseInt(e.target.value))}
-                    className="w-full accent-green-600"
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="flex gap-2 mt-6">
-              <button
-                onClick={() => {
-                  handleGenerateSummary();
-                  setShowSummarySettings(false);
-                }}
-                className="flex-1 px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors font-medium shadow-sm"
-              >
-                Apply & Generate
-              </button>
-              <button
-                onClick={() => setShowSummarySettings(false)}
-                className="px-4 py-2 text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 rounded transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SummarySettingsModal
+        isOpen={showSummarySettings}
+        preset={summaryPreset}
+        detailLevel={summaryDetailLevel}
+        tone={summaryTone}
+        questionCount={summaryQuestions}
+        onClose={() => setShowSummarySettings(false)}
+        onPresetChange={setSummaryPreset}
+        onDetailLevelChange={setSummaryDetailLevel}
+        onToneChange={setSummaryTone}
+        onQuestionCountChange={setSummaryQuestions}
+        onGenerate={handleGenerateSummary}
+      />
     </div>
   );
 }
