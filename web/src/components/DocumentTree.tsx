@@ -1,5 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import type { DocNode } from '@/lib/types';
+
+const findFirstFile = (nodes: DocNode[]): DocNode | null => {
+  for (const node of nodes) {
+    if (node.type === 'file') return node;
+    if (node.type === 'folder' && node.children) {
+      const found = findFirstFile(node.children);
+      if (found) return found;
+    }
+  }
+  return null;
+};
 
 interface DocTreeNodeProps {
   node: DocNode;
@@ -131,40 +142,145 @@ function DocTreeNode({
 }
 
 interface DocumentTreeProps {
-  isDocsLoading: boolean;
-  docsError: string | null;
-  visibleDocs: DocNode[];
-  expandedFolders: Record<string, boolean>;
-  docFilter: string;
-  contentSearch: string;
-  searchResults: {docId: string, matches: number}[];
-  isSearching: boolean;
   selectedDocId: string | null;
-  onToggleFolder: (id: string) => void;
   onSelectDoc: (id: string) => void;
-  setDocFilter: (value: string) => void;
-  setContentSearch: (value: string) => void;
-  handleContentSearch: () => void;
   onSettingsClick: () => void;
 }
 
 export function DocumentTree({
-  isDocsLoading,
-  docsError,
-  visibleDocs,
-  expandedFolders,
-  docFilter,
-  contentSearch,
-  searchResults,
-  isSearching,
   selectedDocId,
-  onToggleFolder,
   onSelectDoc,
-  setDocFilter,
-  setContentSearch,
-  handleContentSearch,
   onSettingsClick,
 }: DocumentTreeProps) {
+  const [docs, setDocs] = useState<DocNode[]>([]);
+  const [isDocsLoading, setIsDocsLoading] = useState(false);
+  const [docsError, setDocsError] = useState<string | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [docFilter, setDocFilter] = useState("");
+  // Content search feature is commented out in UI
+  // const [contentSearch, setContentSearch] = useState("");
+  const [searchResults] = useState<{docId: string, matches: number}[]>([]);
+  // const [isSearching, setIsSearching] = useState(false);
+
+  // Load documents on mount
+  useEffect(() => {
+    const loadDocs = async () => {
+      try {
+        setIsDocsLoading(true);
+        setDocsError(null);
+        const res = await fetch("/api/docs");
+        if (!res.ok) {
+          throw new Error(`Failed to load docs: ${res.status}`);
+        }
+        const data = (await res.json()) as { docs: DocNode[] };
+        setDocs(data.docs);
+        // Auto-select the first file if available
+        const firstFile = findFirstFile(data.docs);
+        if (firstFile) {
+          onSelectDoc(firstFile.id);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setDocsError(message);
+      } finally {
+        setIsDocsLoading(false);
+      }
+    };
+
+    void loadDocs();
+  }, [onSelectDoc]);
+
+  const sortDocs = (nodes: DocNode[]): DocNode[] => {
+    return nodes
+      .map(node => {
+        if (node.type === "folder" && node.children) {
+          return {
+            ...node,
+            children: sortDocs(node.children)
+          };
+        }
+        return node;
+      })
+      .sort((a, b) => {
+        // Folders first, then files
+        if (a.type === "folder" && b.type === "file") return -1;
+        if (a.type === "file" && b.type === "folder") return 1;
+        // Alphabetically by name
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
+  };
+
+  const filterDocs = (nodes: DocNode[], query: string): DocNode[] => {
+    if (!query.trim()) return nodes;
+    const lowerQuery = query.toLowerCase();
+
+    const matches = (node: DocNode): boolean => {
+      const fullPath = node.path || node.name;
+      return (
+        node.name.toLowerCase().includes(lowerQuery) ||
+        fullPath.toLowerCase().includes(lowerQuery)
+      );
+    };
+
+    const recurse = (node: DocNode): DocNode | null => {
+      if (node.type === "file") {
+        return matches(node) ? node : null;
+      }
+
+      const filteredChildren = (node.children || [])
+        .map(recurse)
+        .filter((child): child is DocNode => child !== null);
+
+      if (filteredChildren.length > 0 || matches(node)) {
+        return {
+          ...node,
+          children: filteredChildren,
+        };
+      }
+
+      return null;
+    };
+
+    return nodes
+      .map(recurse)
+      .filter((node): node is DocNode => node !== null);
+  };
+
+  const visibleDocs = sortDocs(filterDocs(docs, docFilter));
+  
+  const toggleFolder = (id: string) => {
+    setExpandedFolders((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Content search feature is commented out in UI
+  // const handleContentSearch = async () => {
+  //   if (!contentSearch.trim()) {
+  //     setSearchResults([]);
+  //     return;
+  //   }
+  //   setIsSearching(true);
+  //   const results: {docId: string, matches: number}[] = [];
+  //   const searchLower = contentSearch.toLowerCase();
+  //   for (const doc of docs) {
+  //     if (doc.type === "file") {
+  //       try {
+  //         const encodedId = encodeURIComponent(doc.id);
+  //         const res = await fetch(`/api/docs/${encodedId}`);
+  //         if (res.ok) {
+  //           const data = await res.json();
+  //           const matches = (data.rawText.toLowerCase().match(new RegExp(searchLower, 'g')) || []).length;
+  //           if (matches > 0) {
+  //             results.push({ docId: doc.id, matches });
+  //           }
+  //         }
+  //       } catch {
+  //         // Skip errors for individual documents
+  //       }
+  //     }
+  //   }
+  //   setSearchResults(results.sort((a, b) => b.matches - a.matches));
+  //   setIsSearching(false);
+  // };
   return (
     <section className="border-r border-slate-300 flex flex-col bg-white overflow-hidden" style={{ width: `${20}%` }}>
       <div className="border-b border-slate-300 px-4 py-3 shrink-0 bg-white">
@@ -243,7 +359,7 @@ export function DocumentTree({
                 node={node}
                 depth={0}
                 expanded={expandedFolders}
-                onToggleFolder={onToggleFolder}
+                onToggleFolder={toggleFolder}
                 selectedDocId={selectedDocId}
                 onSelectDoc={onSelectDoc}
                 filterQuery={docFilter}

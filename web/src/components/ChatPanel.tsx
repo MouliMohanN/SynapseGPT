@@ -4,49 +4,36 @@ import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import type { ChatMessage, DocumentContent } from '@/lib/types';
+import { useChat } from '@/hooks/useChat';
 
 interface ChatPanelProps {
-  chatMessages: ChatMessage[];
-  isStreaming: boolean;
-  streamingCharCount: number;
-  chatInput: string;
   selectedDocId: string | null;
   selectedSectionId: string | null;
-  docContent: DocumentContent | null;
-  chatEndRef: React.RefObject<HTMLDivElement | null>;
-  chatContainerRef: React.RefObject<HTMLDivElement | null>;
-  setChatInput: (value: string) => void;
-  handleSend: (event: React.FormEvent) => void;
-  handleStopGeneration: () => void;
-  handleClearConversation: () => void;
-  handleRegenerateResponse: () => void;
-  handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-  handleScroll: () => void;
-  setSelectedSectionId: (id: string | null) => void;
+  settings: any;
   rightPanelWidth: number;
 }
 
 export function ChatPanel({
-  chatMessages,
-  isStreaming,
-  streamingCharCount,
-  chatInput,
   selectedDocId,
   selectedSectionId,
-  docContent,
-  chatEndRef,
-  chatContainerRef,
-  setChatInput,
-  handleSend,
-  handleStopGeneration,
-  handleClearConversation,
-  handleRegenerateResponse,
-  handleKeyDown,
-  handleScroll,
-  setSelectedSectionId,
+  settings,
   rightPanelWidth,
 }: ChatPanelProps) {
+  const {
+    chatMessages,
+    chatInput,
+    isStreaming,
+    streamingCharCount,
+    chatEndRef,
+    chatContainerRef,
+    setChatInput,
+    handleSend,
+    handleStopGeneration,
+    handleClearConversation,
+    handleRegenerateResponse,
+    handleKeyDown,
+    handleScroll,
+  } = useChat(selectedDocId, selectedSectionId, settings);
   return (
     <section className="p-3 flex flex-col overflow-hidden bg-white" style={{ width: `${rightPanelWidth}%` }}>
       <div className="flex flex-col gap-1 mb-2 shrink-0">
@@ -75,22 +62,15 @@ export function ChatPanel({
             )}
           </div>
         </div>
-        {selectedSectionId && docContent && (
+        {/* {selectedSectionId && docContent && (
           <div className="text-[10px] text-slate-700 bg-purple-50 border border-purple-300 px-2 py-1 rounded-md flex items-center gap-1">
             <span>📍</span>
             <span>Asking about section:</span>
             <span className="font-semibold text-purple-700">
               {docContent.sections.find(s => s.id === selectedSectionId)?.title}
             </span>
-            <button
-              onClick={() => setSelectedSectionId(null)}
-              className="ml-auto text-slate-500 hover:text-slate-700"
-              title="Clear section context"
-            >
-              ✕
-            </button>
           </div>
-        )}
+        )} */}
       </div>
       <div 
         ref={chatContainerRef}
