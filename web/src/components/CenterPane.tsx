@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SectionTOC, DocumentViewer } from "@/components/DocumentViewer";
-import { SummaryPanel, SummarySettingsModal } from "@/components/SummaryPanel";
+import { SummaryPanel } from "@/components/SummaryPanel";
 import { useSummary } from "@/hooks/useSummary";
 import type { DocumentContent } from "@/lib/types";
 
@@ -29,8 +29,6 @@ export function CenterPane({
     isSummaryLoading,
     summaryError,
     summaryContentRef,
-    showSummarySettings,
-    setShowSummarySettings,
     handleGenerateSummary,
   } = useSummary(selectedDocId, settings);
 
@@ -118,8 +116,7 @@ export function CenterPane({
   }, [docContent]);
 
   return (
-    <>
-      <section
+    <section
         className="flex-1 flex border-r border-slate-300 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-100 hover:scrollbar-thumb-purple-500 min-w-0"
         ref={documentViewerRef}
       >
@@ -140,7 +137,6 @@ export function CenterPane({
             isSummaryLoading={isSummaryLoading}
             summaryError={summaryError}
             summaryContentRef={summaryContentRef}
-            setShowSummarySettings={setShowSummarySettings}
             handleGenerateSummary={handleGenerateSummary}
           />
 
@@ -154,12 +150,5 @@ export function CenterPane({
           />
         </div>
       </section>
-
-      <SummarySettingsModal
-        showSummarySettings={showSummarySettings}
-        setShowSummarySettings={setShowSummarySettings}
-        handleGenerateSummary={handleGenerateSummary}
-      />
-    </>
   );
 }

@@ -9,6 +9,7 @@ interface SettingsModalProps {
     aiModel: string;
     defaultLeftWidth: number;
     defaultRightWidth: number;
+    allowOutsideDocumentAnswers: boolean;
     chatBehavioralSettings: {
       detailLevel: "overview" | "detailed" | "comprehensive";
       tone: "professional" | "casual" | "tutorial";
@@ -65,7 +66,7 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
       <div 
-        className="bg-white border border-slate-200 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+        className="bg-white border border-slate-200 rounded-lg p-6 max-w-2xl w-full mx-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-2">
@@ -75,6 +76,32 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
             className="text-slate-500 hover:text-slate-700 text-xl leading-none"
           >
             ×
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between mb-4 p-3 border border-slate-200 rounded-lg bg-slate-50">
+          <div>
+            <p className="text-sm font-medium text-slate-900">Allow answers outside documents</p>
+            <p className="text-xs text-slate-600 mt-0.5">When enabled, SynapseGPT can answer even if the context isn’t in the loaded docs.</p>
+          </div>
+          <button
+            onClick={() =>
+              setLocalSettings((prev) => ({
+                ...prev,
+                allowOutsideDocumentAnswers: !prev.allowOutsideDocumentAnswers,
+              }))
+            }
+            className={`relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+              localSettings.allowOutsideDocumentAnswers ? "bg-purple-600" : "bg-slate-300"
+            }`}
+            type="button"
+            aria-pressed={localSettings.allowOutsideDocumentAnswers}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                localSettings.allowOutsideDocumentAnswers ? "translate-x-6" : "translate-x-0"
+              }`}
+            />
           </button>
         </div>
 
@@ -412,18 +439,18 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
           </div>
         </div>
 
-        <div className="flex gap-2 mt-6">
-          <button
-            onClick={handleSave}
-            className="flex-1 px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors font-medium shadow-sm"
-          >
-            Save Settings
-          </button>
+        <div className="flex justify-end gap-3 pt-4">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 rounded transition-colors"
           >
             Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded shadow-sm transition-colors"
+          >
+            Save
           </button>
         </div>
       </div>

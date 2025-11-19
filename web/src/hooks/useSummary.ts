@@ -5,11 +5,10 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
   const [summaryContent, setSummaryContent] = useState<string>("");
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [showSummarySettings, setShowSummarySettings] = useState(false);
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
   
   const summaryContentRef = useRef<HTMLDivElement>(null);
   const isGeneratingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleGenerateSummary = useCallback(async () => {
     if (!selectedDocId || isSummaryLoading || isGeneratingRef.current) return;
@@ -20,8 +19,12 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
     setSummaryError(null);
     setIsSummaryLoading(true);
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     const controller = new AbortController();
-    setAbortController(controller);
+    abortControllerRef.current = controller;
 
     const customMessage = buildBehavioralPrompt(settings.summaryBehavioralSettings);
     console.log("Summary message:", customMessage);
@@ -76,9 +79,9 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
       console.log("Finally block - setting loading to false");
       setIsSummaryLoading(false);
       isGeneratingRef.current = false;
-      setAbortController(null);
+      abortControllerRef.current = null;
     }
-  }, [selectedDocId, settings.summaryBehavioralSettings]);
+  }, [selectedDocId, settings.summaryBehavioralSettings, isSummaryLoading]);
 
   // Auto-generate summary when document loads
   useEffect(() => {
@@ -90,18 +93,24 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
     }
   }, [selectedDocId, handleGenerateSummary]);
 
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   return {
     // State
     summaryContent,
     isSummaryLoading,
     summaryError,
-    showSummarySettings,
     
     // Refs
     summaryContentRef,
     
     // Actions
-    setShowSummarySettings,
     handleGenerateSummary,
   };
 };

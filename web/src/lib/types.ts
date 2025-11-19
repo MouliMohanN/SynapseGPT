@@ -43,6 +43,7 @@ export interface ChatRequestBody {
   docId: string;
   sectionId?: string | null;
   message: string;
+  allowOutsideDocumentAnswers: boolean;
   behavioralSettings: {
     detailLevel: "overview" | "detailed" | "comprehensive";
     tone: "professional" | "casual" | "tutorial";

@@ -16,9 +16,9 @@ export interface ModelConfig {
 export function behavioralToModelConfig(behavioral: BehavioralSettings): ModelConfig {
   // Map detail level to temperature and tokens
   const detailConfig = {
-    overview: { temperature: 0.3, maxTokens: 512 },
-    detailed: { temperature: 0.5, maxTokens: 1536 },
-    comprehensive: { temperature: 0.7, maxTokens: 3072 },
+    overview: { temperature: 0.3, maxTokens: 131000 },
+    detailed: { temperature: 0.5, maxTokens: 131000 },
+    comprehensive: { temperature: 0.7, maxTokens: 131000 },
   };
 
   const detail = detailConfig[behavioral.detailLevel];
@@ -59,9 +59,9 @@ export function buildBehavioralPrompt(behavioral: BehavioralSettings): string {
   // Add question generation instruction if applicable
   if (behavioral.generateQuestions !== 0) {
     if (behavioral.generateQuestions === -1) {
-      parts.push("Include relevant questions that readers might have about this content.");
+      parts.push("Include relevant questions and answers that readers might have about this content.");
     } else {
-      parts.push(`Include exactly ${behavioral.generateQuestions} relevant questions that readers might have about this content.`);
+      parts.push(`Include exactly ${behavioral.generateQuestions} relevant questions and answers that readers might have about this content.`);
     }
   }
 

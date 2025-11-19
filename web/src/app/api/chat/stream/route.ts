@@ -9,7 +9,14 @@ import { behavioralToModelConfig, buildBehavioralPrompt } from "@/lib/chat/setti
 
 export async function POST(request: Request) {
   const body = (await request.json()) as ChatRequestBody;
-  const { conversationId, docId, sectionId, message, behavioralSettings } = body;
+  const {
+    conversationId,
+    docId,
+    sectionId,
+    message,
+    behavioralSettings,
+    allowOutsideDocumentAnswers,
+  } = body;
 
   if (!conversationId || !message) {
     return NextResponse.json(
@@ -51,6 +58,7 @@ export async function POST(request: Request) {
     docId: docId ?? null,
     sectionId: sectionId ?? null,
     documentContext,
+    allowOutsideDocumentAnswers,
   }) + " " + buildBehavioralPrompt(behavioralSettings);
 
   const modelConfig = behavioralToModelConfig(behavioralSettings);

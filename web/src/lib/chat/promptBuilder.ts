@@ -3,14 +3,21 @@ export interface SystemPromptInput {
   docId: string | null;
   sectionId: string | null;
   documentContext: string;
+  allowOutsideDocumentAnswers?: boolean;
 }
 
 export function buildSystemPrompt(input: SystemPromptInput): string {
   const parts: string[] = [];
 
-  parts.push(
-    "You are SynapseGPT, a local-first documentation assistant. Answer using only the information from the provided document content",
-  );
+  if (input.allowOutsideDocumentAnswers) {
+    parts.push(
+      "You are SynapseGPT, a local-first documentation assistant. Prioritize answering using the provided document content, but if it lacks the necessary information you may answer using your broader knowledge. Clearly note when the answer goes beyond the document.",
+    );
+  } else {
+    parts.push(
+      "You are SynapseGPT, a local-first documentation assistant. Answer using only the information from the provided document content",
+    );
+  }
 
   if (input.documentContext) {
     parts.push(

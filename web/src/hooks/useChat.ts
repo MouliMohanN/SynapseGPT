@@ -88,6 +88,7 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
           docId: selectedDocId,
           sectionId: selectedSectionId,
           message: userMessage.content,
+          allowOutsideDocumentAnswers: settings.allowOutsideDocumentAnswers,
           behavioralSettings: settings.chatBehavioralSettings,
         }),
         signal: controller.signal,
