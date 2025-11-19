@@ -9,7 +9,7 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
   const parts: string[] = [];
 
   parts.push(
-    "You are SynapseGPT, a local-first documentation assistant. Answer using only the information from the provided document content and be detailed.",
+    "You are SynapseGPT, a local-first documentation assistant. Answer using only the information from the provided document content",
   );
 
   if (input.documentContext) {

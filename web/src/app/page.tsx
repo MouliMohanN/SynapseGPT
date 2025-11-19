@@ -97,7 +97,7 @@ export default function HomePage() {
 
         {/* Resize handle for right panel */}
         <div
-          className="w-1 bg-slate-800 hover:bg-sky-500 cursor-col-resize transition-colors shrink-0"
+          className="w-1 bg-slate-300 hover:bg-purple-500 cursor-col-resize transition-colors shrink-0"
           onMouseDown={() => setIsDraggingRight(true)}
         />
 
