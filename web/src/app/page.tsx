@@ -2,15 +2,12 @@
 
 // web/src/app/page.tsx
 import React, { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { prism } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { ChatMessage, DocNode, DocumentContent } from "@/lib/types";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Logo } from "@/components/Logo";
-import { DocumentTreeSkeleton, DocumentViewerSkeleton, SummarySkeleton } from "@/components/Skeleton";
 import { SettingsModal } from "@/components/SettingsModal";
+import { DocumentPanel } from "@/components/home/DocumentPanel";
+import { ContentPanel } from "@/components/home/ContentPanel";
+import { ChatPanel } from "@/components/home/ChatPanel";
 
 const DEFAULT_CONVERSATION_ID = "demo-conversation";
 const CHAT_STORAGE_KEY = "synapsegpt-chat-history";
@@ -65,11 +62,11 @@ export default function HomePage() {
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
   
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-  const summaryContentRef = useRef<HTMLDivElement>(null);
-  const documentViewerRef = useRef<HTMLDivElement>(null);
-  const documentContentRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+  const summaryContentRef = useRef<HTMLDivElement | null>(null);
+  const documentViewerRef = useRef<HTMLDivElement | null>(null);
+  const documentContentRef = useRef<HTMLDivElement | null>(null);
 
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -641,9 +638,9 @@ export default function HomePage() {
             <span className="font-medium text-slate-900">AI-Powered</span> Documentation Assistant
           </div>
           <div className="h-4 w-px bg-slate-300" />
-          <a 
-            href="https://www.synapsewave.com/" 
-            target="_blank" 
+          <a
+            href="https://www.synapsewave.com/"
+            target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-purple-600 hover:text-purple-700 font-medium transition-colors"
           >
@@ -651,519 +648,81 @@ export default function HomePage() {
           </a>
         </div>
       </header>
-      
+
       <main className="flex-1 flex overflow-hidden">
-      {/* Left: document browser */}
-      <section className="border-r border-slate-300 flex flex-col bg-white overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
-        <div className="border-b border-slate-300 px-4 py-3 shrink-0 bg-white">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <h2 className="text-sm font-semibold text-slate-900">Documentation</h2>
-            </div>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="p-1.5 bg-white hover:bg-purple-50 text-purple-600 rounded-md border border-purple-200 hover:border-purple-300 transition-all"
-              title="Settings"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-          </div>
-          <input
-            type="text"
-            value={docFilter}
-            onChange={(e) => setDocFilter(e.target.value)}
-            placeholder="Filter by name or path…"
-            className="w-full rounded-lg bg-white border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-2 shadow-sm"
-          />
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                value={contentSearch}
-                onChange={(e) => setContentSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleContentSearch()}
-                placeholder="Search content…"
-                className="w-full rounded-lg bg-white border border-slate-300 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm"
-              />
-            </div>
-            <button
-              onClick={handleContentSearch}
-              disabled={isSearching || !contentSearch.trim()}
-              className="px-3 py-2 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg shadow-sm transition-colors font-medium"
-            >
-              {isSearching ? 'Searching...' : 'Search'}
-            </button>
-          </div>
-          {searchResults.length > 0 && (
-            <div className="mt-2 px-2 py-1 text-[10px] text-purple-700 bg-purple-50 rounded-md border border-purple-200">
-              <span className="font-medium">{searchResults.length}</span> result{searchResults.length !== 1 ? 's' : ''} found
-            </div>
-          )}
-        </div>
-        <div className="flex-1 text-xs text-slate-700 overflow-auto p-4 bg-white">
-          <ErrorBoundary>
-            {isDocsLoading && <DocumentTreeSkeleton />}
-            {docsError && (
-              <p className="text-red-400">Failed to load docs: {docsError}</p>
-            )}
-            {!isDocsLoading && !docsError && visibleDocs.length === 0 && (
-              <div className="text-center py-8">
-                <svg className="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <p className="text-slate-500 text-sm">No documents found</p>
-                <p className="text-slate-400 text-xs mt-1">Try adjusting your filters</p>
-              </div>
-            )}
-            {!isDocsLoading && !docsError && visibleDocs.length > 0 && (
-              <div className="space-y-1">
-                {visibleDocs.map((node) => (
-                  <DocTreeNode
-                    key={node.id}
-                    node={node}
-                    depth={0}
-                    expanded={expandedFolders}
-                    onToggleFolder={toggleFolder}
-                    selectedDocId={selectedDocId}
-                    onSelectDoc={setSelectedDocId}
-                    filterQuery={docFilter}
-                    searchResults={searchResults}
-                  />
-                ))}
-              </div>
-            )}
-          </ErrorBoundary>
-        </div>
-      </section>
+        <DocumentPanel
+          widthPercent={leftPanelWidth}
+          visibleDocs={visibleDocs}
+          isDocsLoading={isDocsLoading}
+          docsError={docsError}
+          docFilter={docFilter}
+          onDocFilterChange={setDocFilter}
+          contentSearch={contentSearch}
+          onContentSearchChange={setContentSearch}
+          onContentSearch={handleContentSearch}
+          isSearching={isSearching}
+          searchResults={searchResults}
+          expandedFolders={expandedFolders}
+          onToggleFolder={toggleFolder}
+          selectedDocId={selectedDocId}
+          onSelectDoc={setSelectedDocId}
+          onOpenSettings={() => setShowSettings(true)}
+        />
 
-      {/* Resize handle for left panel */}
-      <div
-        className="w-1 bg-slate-300 hover:bg-purple-500 cursor-col-resize transition-colors shrink-0"
-        onMouseDown={() => setIsDraggingLeft(true)}
-      />
+        {/* Resize handle for left panel */}
+        <div
+          className="w-1 bg-slate-300 hover:bg-purple-500 cursor-col-resize transition-colors shrink-0"
+          onMouseDown={() => setIsDraggingLeft(true)}
+        />
 
-      {/* Center: summary (top 25%) + raw viewer (bottom 75%) */}
-      <section className="flex-1 flex border-r border-slate-300 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-100 hover:scrollbar-thumb-purple-500" ref={documentViewerRef}>
-        {/* Section TOC - Left side - sticky */}
-        {docContent && showSections && (
-          <div className="w-48 border-r border-slate-300 shrink-0 sticky top-0 self-start h-screen flex flex-col overflow-hidden bg-white shadow-sm">
-            <div className="px-3 py-2 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
-              <h3 className="text-xs font-semibold text-slate-800">Sections</h3>
-              <button
-                onClick={() => setShowSections(false)}
-                className="text-xs text-slate-400 hover:text-slate-700"
-                title="Hide sections"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-100 hover:scrollbar-thumb-purple-500">
-              {/* AI Summary Section */}
-              <div className="border-b border-slate-300">
-                <button
-                  onClick={() => {
-                    setSelectedSectionId(null);
-                    const summaryEl = document.querySelector('[data-section="ai-summary"]');
-                    summaryEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }}
-                  className={`w-full text-left px-3 py-2 text-[11px] transition-colors ${
-                    selectedSectionId === null
-                      ? 'bg-purple-50 text-purple-700 font-semibold border-l-2 border-purple-600'
-                      : 'bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  ✨ AI Summary
-                </button>
-              </div>
-              
-              {/* Document Sections */}
-              {docContent.sections.length > 0 && (
-                <div className="p-2 space-y-0.5">
-                  {docContent.sections.map((section) => (
-                    <button
-                      key={section.id}
-                      data-section-id={section.id}
-                      onClick={() => handleSectionClick(section.id)}
-                      className={`w-full text-left px-2 py-1 rounded-md text-[11px] transition-all ${
-                        activeSectionId === section.id
-                          ? 'bg-purple-600 text-white shadow-sm'
-                          : selectedSectionId === section.id
-                            ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                            : 'hover:bg-slate-100 text-slate-700'
-                      }`}
-                      style={{ paddingLeft: `${8 + (section.level - 1) * 8}px` }}
-                    >
-                      <span className="block truncate">{section.title}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        
-        {/* Content area with summary and document viewer */}
-        <div className="flex-1 flex flex-col">
-        <div data-section="ai-summary" className="flex flex-col shrink-0 border-b border-slate-300 bg-purple-50/30">
-          <div className="p-3 pb-2 flex flex-col">
-            <div className="flex items-center justify-between mb-2 shrink-0">
-              <h2 className="text-sm font-semibold text-slate-800">✨ AI Summary</h2>
-              {selectedDocId && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowSummarySettings(true)}
-                    className="px-2 py-1 text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md shadow-sm transition-colors"
-                    title="Configure summary settings"
-                  >
-                    ⚙️ Settings
-                  </button>
-                  <button
-                    onClick={handleGenerateSummary}
-                    disabled={isSummaryLoading}
-                    className="px-2 py-1 text-[10px] bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 disabled:text-slate-500 text-white rounded-md shadow-sm transition-colors"
-                  >
-                    {isSummaryLoading ? "Generating..." : "Regenerate"}
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            {!selectedDocId && (
-              <p className="text-xs text-slate-600">Select a document to see its summary.</p>
-            )}
-            
-            {selectedDocId && summaryError && (
-              <div className="text-xs text-red-600">
-                Error: {summaryError}
-              </div>
-            )}
-            
-            {selectedDocId && summaryContent && (
-              <ErrorBoundary>
-                <div ref={summaryContentRef}>
-                  <div className="prose prose-slate prose-xs max-w-none text-xs
-                    prose-p:my-3 prose-p:leading-relaxed prose-p:text-slate-900
-                    prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
-                    prose-ol:my-3 prose-ol:pl-5 prose-ol:space-y-1
-                    prose-li:my-1 prose-li:text-slate-900
-                    prose-h1:text-sm prose-h1:font-bold prose-h1:mt-4 prose-h1:mb-2 prose-h1:text-slate-900
-                    prose-h2:text-xs prose-h2:font-bold prose-h2:mt-3 prose-h2:mb-1.5 prose-h2:text-slate-900
-                    prose-h3:text-xs prose-h3:font-semibold prose-h3:mt-2 prose-h3:mb-1 prose-h3:text-slate-900
-                    prose-code:text-[11px] prose-code:bg-purple-100 prose-code:text-purple-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:font-medium
-                    prose-pre:my-3 prose-pre:bg-slate-50 prose-pre:p-3 prose-pre:rounded-lg prose-pre:border prose-pre:border-slate-300
-                    prose-strong:text-slate-900 prose-strong:font-semibold
-                    prose-a:text-purple-600 prose-a:underline prose-a:hover:text-purple-700"
-                  >
-                    <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                      {summaryContent}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              </ErrorBoundary>
-            )}
-            
-            {selectedDocId && isSummaryLoading && !summaryContent && <SummarySkeleton />}
-          </div>
-        </div>
-        
-        {/* Document viewer */}
-        <div className="flex-1 p-3 bg-white">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-slate-800">📄 Document Viewer</h2>
-                {docContent && !showSections && (
-                  <button
-                    onClick={() => setShowSections(true)}
-                    className="text-xs px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors"
-                    title="Show sections"
-                  >
-                    📑 Sections
-                  </button>
-                )}
-              </div>
-              {docContent && (
-                <span className="text-[10px] text-slate-600">
-                  {docContent.path} · {docContent.meta.fileType?.toUpperCase()} ·{" "}
-                  {docContent.meta.size} chars
-                </span>
-              )}
-            </div>
-          {isDocLoading && <DocumentViewerSkeleton />}
-          {docError && (
-            <p className="text-xs text-red-600">Failed to load document: {docError}</p>
-          )}
-          {!isDocLoading && !docError && !docContent && (
-            <p className="text-xs text-slate-600">
-              Select a document from the left to view its contents.
-            </p>
-          )}
-          {!isDocLoading && !docError && docContent && (
-            <ErrorBoundary>
-              <div ref={documentContentRef} className="prose prose-slate prose-sm max-w-none text-slate-900
-              prose-p:my-3 prose-p:leading-relaxed prose-p:text-slate-900
-              prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
-              prose-ol:my-3 prose-ol:pl-5 prose-ol:space-y-1
-              prose-li:my-1 prose-li:text-slate-900
-              prose-h1:text-lg prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-3 prose-h1:text-slate-900
-              prose-h2:text-base prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-2 prose-h2:text-slate-900
-              prose-h3:text-sm prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2 prose-h3:text-slate-900
-              prose-code:text-xs prose-code:bg-purple-100 prose-code:text-purple-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:font-medium
-              prose-pre:my-4 prose-pre:bg-slate-50 prose-pre:p-4 prose-pre:rounded-lg prose-pre:border prose-pre:border-slate-300
-              prose-strong:font-semibold prose-strong:text-slate-900
-              prose-a:text-purple-600 prose-a:underline prose-a:hover:text-purple-700"
-            >
-              <ReactMarkdown 
-                rehypePlugins={[rehypeRaw]}
-                components={{
-                  code({ className, children, ...props }: any) {
-                    const match = /language-(\w+)/.exec(className || '');
-                    const codeString = String(children).replace(/\n$/, '');
-                    const isInline = !className;
-                    
-                    return !isInline && match ? (
-                      <div className="relative group">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(codeString);
-                          }}
-                          className="absolute right-2 top-2 px-2 py-1 text-[10px] bg-purple-600 hover:bg-purple-700 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                        >
-                          Copy
-                        </button>
-                        <SyntaxHighlighter
-                          style={prism as any}
-                          language={match[1]}
-                          PreTag="div"
-                          customStyle={{
-                            margin: 0,
-                            borderRadius: '0.375rem',
-                            fontSize: '0.75rem',
-                            backgroundColor: '#f8f9fa',
-                            border: '1px solid #e2e8f0',
-                          }}
-                          {...props}
-                        >
-                          {codeString}
-                        </SyntaxHighlighter>
-                      </div>
-                    ) : (
-                      <code className={className} {...props}>
-                        {children}
-                      </code>
-                    );
-                  },
-                }}
-              >
-                {docContent.rawText}
-              </ReactMarkdown>
-            </div>
-            </ErrorBoundary>
-          )}
-        </div>
-        </div>
-      </section>
+        <ContentPanel
+          documentViewerRef={documentViewerRef}
+          summaryContentRef={summaryContentRef}
+          documentContentRef={documentContentRef}
+          docContent={docContent}
+          showSections={showSections}
+          onShowSections={() => setShowSections(true)}
+          onHideSections={() => setShowSections(false)}
+          selectedSectionId={selectedSectionId}
+          activeSectionId={activeSectionId}
+          onSectionSelect={setSelectedSectionId}
+          handleSectionClick={handleSectionClick}
+          selectedDocId={selectedDocId}
+          summaryError={summaryError}
+          summaryContent={summaryContent}
+          isSummaryLoading={isSummaryLoading}
+          onOpenSummarySettings={() => setShowSummarySettings(true)}
+          onGenerateSummary={handleGenerateSummary}
+          docError={docError}
+          isDocLoading={isDocLoading}
+        />
 
-      {/* Resize handle for right panel */}
-      <div
-        className="w-1 bg-slate-800 hover:bg-sky-500 cursor-col-resize transition-colors shrink-0"
-        onMouseDown={() => setIsDraggingRight(true)}
-      />
+        {/* Resize handle for right panel */}
+        <div
+          className="w-1 bg-slate-800 hover:bg-sky-500 cursor-col-resize transition-colors shrink-0"
+          onMouseDown={() => setIsDraggingRight(true)}
+        />
 
-      {/* Right: chat panel */}
-      <section className="p-3 flex flex-col overflow-hidden bg-white" style={{ width: `${rightPanelWidth}%` }}>
-        <div className="flex flex-col gap-1 mb-2 shrink-0">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-800">Chat</h2>
-            <div className="flex gap-2">
-              {chatMessages.length > 0 && (
-                <>
-                <button
-                  onClick={handleRegenerateResponse}
-                  disabled={isStreaming || chatMessages.length < 2}
-                  className="text-[10px] px-2 py-1 rounded-md bg-purple-600 hover:bg-purple-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Regenerate last response"
-                >
-                  ↻ Regenerate
-                </button>
-                <button
-                  onClick={handleClearConversation}
-                  disabled={isStreaming}
-                  className="text-[10px] px-2 py-1 rounded-md bg-purple-600 hover:bg-purple-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Clear conversation"
-                >
-                  Clear
-                </button>
-              </>
-            )}
-          </div>
-          </div>
-          {selectedSectionId && docContent && (
-            <div className="text-[10px] text-slate-700 bg-purple-50 border border-purple-300 px-2 py-1 rounded-md flex items-center gap-1">
-              <span>📍</span>
-              <span>Asking about section:</span>
-              <span className="font-semibold text-purple-700">
-                {docContent.sections.find(s => s.id === selectedSectionId)?.title}
-              </span>
-              <button
-                onClick={() => setSelectedSectionId(null)}
-                className="ml-auto text-slate-500 hover:text-slate-700"
-                title="Clear section context"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-        </div>
-        <div 
-          ref={chatContainerRef}
-          onScroll={handleScroll}
-          className="flex-1 border border-slate-300 rounded-lg p-3 mb-2 overflow-auto space-y-3 bg-slate-50"
-        >
-          {chatMessages.length === 0 && (
-            <p className="text-xs text-slate-600">
-              Start a conversation about the selected document.
-            </p>
-          )}
-          {chatMessages.map((msg, index) => (
-            <div
-              key={`${msg.role}-${msg.createdAt}-${index}`}
-              className={`px-3 py-2 rounded-lg shadow-sm ${msg.role === "user" ? "bg-purple-600 text-white ml-8" : "bg-white border border-slate-200 mr-2 text-slate-900"}`}
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={`block text-[10px] uppercase tracking-wider font-semibold ${
-                  msg.role === "user" ? "text-purple-100" : "text-slate-600"
-                }`}>
-                  {msg.role === "user" ? "You" : "Assistant"}
-                </span>
-                <span className={`text-[9px] ${
-                  msg.role === "user" ? "text-purple-100" : "text-slate-500"
-                }`}>
-                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              {msg.role === "assistant" ? (
-                <div className="prose prose-slate prose-xs max-w-none text-xs
-                  prose-p:my-4 prose-p:leading-relaxed prose-p:text-slate-900
-                  prose-ul:my-4 prose-ul:pl-6 prose-ul:space-y-2
-                  prose-ol:my-4 prose-ol:pl-6 prose-ol:space-y-2
-                  prose-li:leading-relaxed prose-li:pl-2 prose-li:text-slate-900
-                  prose-headings:mt-6 prose-headings:mb-3 prose-headings:font-bold prose-headings:text-xs prose-headings:text-slate-900
-                  prose-h1:text-xs prose-h2:text-xs prose-h3:text-xs
-                  prose-pre:my-4 prose-pre:bg-slate-50 prose-pre:border prose-pre:border-slate-300 prose-pre:text-xs prose-pre:rounded-lg
-                  prose-code:bg-purple-100 prose-code:text-purple-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-code:font-medium
-                  prose-strong:font-semibold prose-strong:text-slate-900
-                  prose-a:text-purple-600 prose-a:underline prose-a:hover:text-purple-700">
-                  <ReactMarkdown 
-                    rehypePlugins={[rehypeRaw]}
-                    components={{
-                      code({ className, children, ...props }: any) {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const codeString = String(children).replace(/\n$/, '');
-                        const isInline = !className;
-                        
-                        return !isInline && match ? (
-                          <div className="relative group">
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(codeString);
-                              }}
-                              className="absolute right-2 top-2 px-2 py-1 text-[10px] bg-purple-600 hover:bg-purple-700 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                            >
-                              Copy
-                            </button>
-                            <SyntaxHighlighter
-                              style={prism as any}
-                              language={match[1]}
-                              PreTag="div"
-                              customStyle={{
-                                margin: 0,
-                                borderRadius: '0.375rem',
-                                fontSize: '0.75rem',
-                                backgroundColor: '#f8f9fa',
-                                border: '1px solid #e2e8f0',
-                              }}
-                              {...props}
-                            >
-                              {codeString}
-                            </SyntaxHighlighter>
-                          </div>
-                        ) : (
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        );
-                      },
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                <span className="text-xs leading-relaxed whitespace-pre-wrap">{msg.content}</span>
-              )}
-            </div>
-          ))}
-          {isStreaming && (
-            <div className="px-3 py-2 rounded-lg bg-white border border-slate-200 shadow-sm mr-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-800 text-xs">
-                  <div className="flex gap-1">
-                    <span className="animate-bounce" style={{ animationDelay: '0ms' }}>●</span>
-                    <span className="animate-bounce" style={{ animationDelay: '150ms' }}>●</span>
-                    <span className="animate-bounce" style={{ animationDelay: '300ms' }}>●</span>
-                  </div>
-                  <span>Generating response...</span>
-                </div>
-                {streamingCharCount > 0 && (
-                  <span className="text-[10px] font-mono text-purple-600">
-                    {streamingCharCount} chars
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
-        <form className="flex flex-col gap-2" onSubmit={handleSend}>
-          <textarea
-            placeholder="Ask anything about this document… (Shift+Enter for new line)"
-            className="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none min-h-[60px] text-slate-900"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={!selectedDocId || isStreaming}
-            rows={2}
-          />
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!selectedDocId || isStreaming || !chatInput.trim()}
-            >
-              {isStreaming ? "Streaming…" : "Send"}
-            </button>
-            {isStreaming && (
-              <button
-                type="button"
-                onClick={handleStopGeneration}
-                className="px-3 py-1.5 text-xs rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-sm"
-              >
-                Stop
-              </button>
-            )}
-          </div>
-        </form>
-      </section>
-
+        <ChatPanel
+          widthPercent={rightPanelWidth}
+          chatMessages={chatMessages}
+          isStreaming={isStreaming}
+          onRegenerate={handleRegenerateResponse}
+          onClearConversation={handleClearConversation}
+          selectedSectionTitle={selectedSectionId && docContent ? docContent.sections.find((s) => s.id === selectedSectionId)?.title : undefined}
+          onClearSelectedSection={() => setSelectedSectionId(null)}
+          chatContainerRef={chatContainerRef}
+          onChatScroll={handleScroll}
+          chatEndRef={chatEndRef}
+          streamingCharCount={streamingCharCount}
+          chatInput={chatInput}
+          onChatInputChange={setChatInput}
+          onChatKeyDown={handleKeyDown}
+          onSend={handleSend}
+          onStopGeneration={handleStopGeneration}
+          isDocSelected={Boolean(selectedDocId)}
+        />
+      </main>
       {/* About Modal */}
       {showAbout && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAbout(false)}>
@@ -1571,7 +1130,6 @@ export default function HomePage() {
           </div>
         </div>
       )}
-      </main>
     </div>
   );
 }
@@ -1587,118 +1145,4 @@ function findFirstFile(nodes: DocNode[]): DocNode | null {
     }
   }
   return null;
-}
-
-interface DocTreeNodeProps {
-  node: DocNode;
-  depth: number;
-  expanded: Record<string, boolean>;
-  onToggleFolder: (id: string) => void;
-  selectedDocId: string | null;
-  onSelectDoc: (id: string) => void;
-  filterQuery?: string;
-  searchResults?: {docId: string, matches: number}[];
-}
-
-function DocTreeNode({
-  node,
-  depth,
-  expanded,
-  onToggleFolder,
-  selectedDocId,
-  onSelectDoc,
-  filterQuery,
-  searchResults,
-}: DocTreeNodeProps) {
-  const isFolder = node.type === "folder";
-  const isExpanded = filterQuery?.trim()
-    ? true
-    : !!expanded[node.id];
-  const isActive = node.id === selectedDocId;
-  const lowerQuery = filterQuery?.trim().toLowerCase() ?? "";
-  const isMatch = lowerQuery
-    ? (node.name.toLowerCase().includes(lowerQuery) ||
-        (node.path || "").toLowerCase().includes(lowerQuery))
-    : false;
-  const searchMatch = searchResults?.find(r => r.docId === node.id);
-
-  const paddingLeft = 4 + depth * 10;
-
-  if (isFolder) {
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => onToggleFolder(node.id)}
-          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-all group ${
-            isMatch ? "bg-amber-50 border border-amber-300" : ""
-          }`}
-          style={{ paddingLeft }}
-        >
-          <svg className="w-3 h-3 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {isExpanded ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            )}
-          </svg>
-          <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-          </svg>
-          <span className="truncate font-medium text-slate-900 group-hover:text-slate-950">{node.name}</span>
-        </button>
-        {isExpanded && node.children && (
-          <div className="mt-0.5 space-y-0.5">
-            {node.children.map((child) => (
-              <DocTreeNode
-                key={child.id}
-                node={child}
-                depth={depth + 1}
-                expanded={expanded}
-                onToggleFolder={onToggleFolder}
-                selectedDocId={selectedDocId}
-                onSelectDoc={onSelectDoc}
-                filterQuery={filterQuery}
-                searchResults={searchResults}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSelectDoc(node.id)}
-      className={`w-full flex flex-col px-2 py-1.5 rounded-lg transition-all group ${
-        isActive
-          ? "bg-purple-600 text-white shadow-sm"
-          : isMatch || searchMatch
-            ? "bg-purple-50 text-purple-900 border border-purple-300"
-            : "hover:bg-slate-100 text-slate-700"
-      }`}
-      style={{ paddingLeft }}
-    >
-      <div className="flex items-center gap-2">
-        <svg className={`w-4 h-4 flex-shrink-0 ${
-          isActive ? "text-purple-200" : "text-purple-500"
-        }`} fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-        </svg>
-        <span className="block truncate text-[12px] font-medium">{node.name}</span>
-        {searchMatch && (
-          <span className="ml-auto text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-medium">
-            {searchMatch.matches}
-          </span>
-        )}
-      </div>
-      <span className={`block text-[10px] truncate ml-6 ${
-        isActive ? "text-purple-200" : "text-slate-500"
-      }`}>
-        {node.path}
-      </span>
-    </button>
-  );
 }
