@@ -9,15 +9,21 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
   const summaryContentRef = useRef<HTMLDivElement>(null);
   const isGeneratingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const currentDocIdRef = useRef<string | null>(null);
+  const pendingDocIdRef = useRef<string | null>(null);
+  const latestHandleRef = useRef<(() => void) | null>(null);
 
   const handleGenerateSummary = useCallback(async () => {
-    if (!selectedDocId || isSummaryLoading || isGeneratingRef.current) return;
+    if (!selectedDocId || isGeneratingRef.current) return;
 
     console.log("Starting summary generation for doc:", selectedDocId);
     isGeneratingRef.current = true;
     setSummaryContent("");
     setSummaryError(null);
     setIsSummaryLoading(true);
+
+    currentDocIdRef.current = selectedDocId;
+    pendingDocIdRef.current = selectedDocId;
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -80,18 +86,40 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
       setIsSummaryLoading(false);
       isGeneratingRef.current = false;
       abortControllerRef.current = null;
+      const pendingDocId = pendingDocIdRef.current;
+      if (pendingDocId && pendingDocId !== currentDocIdRef.current) {
+        if (latestHandleRef.current) {
+          latestHandleRef.current();
+        }
+      }
     }
-  }, [selectedDocId, settings.summaryBehavioralSettings, isSummaryLoading]);
+  }, [selectedDocId, settings.summaryBehavioralSettings]);
 
   // Auto-generate summary when document loads
   useEffect(() => {
-    if (selectedDocId) {
-      handleGenerateSummary();
-    } else {
+    pendingDocIdRef.current = selectedDocId;
+
+    if (!selectedDocId) {
       setSummaryContent("");
       setSummaryError(null);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      return;
+    }
+
+    if (isGeneratingRef.current) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    } else {
+      handleGenerateSummary();
     }
   }, [selectedDocId, handleGenerateSummary]);
+
+  useEffect(() => {
+    latestHandleRef.current = handleGenerateSummary;
+  }, [handleGenerateSummary]);
 
   useEffect(() => {
     return () => {
