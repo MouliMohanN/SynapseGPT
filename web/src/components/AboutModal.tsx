@@ -18,9 +18,10 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative"
         onClick={handleContentClick}
       >
+        <ConfettiLayer />
         <div className="sticky top-0 bg-white border-b border-slate-300 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Logo size="md" showText={true} />
@@ -179,6 +180,58 @@ const capabilityCards = [
     ),
   },
 ];
+
+const CONFETTI_COLORS = [
+  "#a855f7",
+  "#ec4899",
+  "#22d3ee",
+  "#f97316",
+  "#84cc16",
+];
+
+const CONFETTI_PRESETS = [
+  { id: 1, left: 5, delay: 0, duration: 4.5, size: 12, color: CONFETTI_COLORS[0] },
+  { id: 2, left: 15, delay: 0.3, duration: 5, size: 10, color: CONFETTI_COLORS[1] },
+  { id: 3, left: 25, delay: 0.8, duration: 6, size: 8, color: CONFETTI_COLORS[2] },
+  { id: 4, left: 35, delay: 0.1, duration: 4.2, size: 14, color: CONFETTI_COLORS[3] },
+  { id: 5, left: 45, delay: 0.6, duration: 5.2, size: 9, color: CONFETTI_COLORS[4] },
+  { id: 6, left: 55, delay: 1.2, duration: 5.7, size: 11, color: CONFETTI_COLORS[0] },
+  { id: 7, left: 65, delay: 0.4, duration: 4.8, size: 13, color: CONFETTI_COLORS[1] },
+  { id: 8, left: 75, delay: 1.1, duration: 6.1, size: 10, color: CONFETTI_COLORS[2] },
+  { id: 9, left: 85, delay: 0.2, duration: 5.5, size: 9, color: CONFETTI_COLORS[3] },
+  { id: 10, left: 95, delay: 0.9, duration: 4.7, size: 12, color: CONFETTI_COLORS[4] },
+];
+
+function ConfettiLayer() {
+  const confettiPieces = CONFETTI_PRESETS;
+
+  return (
+    <>
+      <style>{`
+        @keyframes confetti-fall {
+          0% { transform: translate3d(0, -20%, 0) rotate(0deg); opacity: 0.9; }
+          100% { transform: translate3d(0, 120%, 0) rotate(360deg); opacity: 0; }
+        }
+      `}</style>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden z-10" aria-hidden="true">
+        {confettiPieces.map((piece) => (
+          <span
+            key={piece.id}
+            className="absolute block rounded-full opacity-80"
+            style={{
+              left: `${piece.left}%`,
+              width: piece.size,
+              height: piece.size * 0.4,
+              backgroundColor: piece.color,
+              animation: `confetti-fall ${piece.duration}s linear infinite`,
+              animationDelay: `${piece.delay}s`,
+            }}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
 
 const techStackSections = [
   {
