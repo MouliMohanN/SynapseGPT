@@ -3,6 +3,7 @@ export interface SystemPromptInput {
   docId: string | null;
   sectionId: string | null;
   documentContext: string;
+  retrievalContext?: string;
   allowOutsideDocumentAnswers?: boolean;
 }
 
@@ -22,6 +23,12 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
   if (input.documentContext) {
     parts.push(
       `\n\nDOCUMENT CONTENT:\n${input.documentContext}\n\nAnswer questions based strictly on the above content.`,
+    );
+  }
+
+  if (input.retrievalContext) {
+    parts.push(
+      `\n\nRETRIEVED EXCERPTS:\n${input.retrievalContext}\n\nIncorporate the above excerpts when forming your answer.`,
     );
   }
 

@@ -6,6 +6,8 @@ import { streamOllamaResponse } from "@/lib/chat/ollamaClient";
 import { buildSystemPrompt } from "@/lib/chat/promptBuilder";
 import { formatAssistantResponse } from "@/lib/chat/formatters";
 import { behavioralToModelConfig, buildBehavioralPrompt } from "@/lib/chat/settingsMapper";
+import { retrieveRelevantChunks } from "@/lib/rag/simpleRetriever";
+import { isRetrievalContextEnabled } from "@/lib/featureFlags";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as ChatRequestBody;
@@ -35,29 +37,14 @@ export async function POST(request: Request) {
 
   const history = getConversationHistory(conversationId);
 
-  // Load document content if docId is provided
-  let documentContext = "";
-  if (docId) {
-    const docContent = await getDocumentContentById(docId);
-    if (docContent) {
-      documentContext = docContent.rawText;
-      // If a specific section is requested, try to extract just that section
-      if (sectionId && docContent.sections) {
-        const section = docContent.sections.find((s) => s.id === sectionId);
-        if (section) {
-          documentContext = docContent.rawText.substring(
-            section.startOffset,
-            section.endOffset,
-          );
-        }
-      }
-    }
-  }
+  const documentContext = await buildDocumentContext(docId ?? null, sectionId ?? null);
+  const retrievalContext = await buildRetrievalContext(message, docId ?? null);
 
   const systemPrompt = buildSystemPrompt({
     docId: docId ?? null,
     sectionId: sectionId ?? null,
     documentContext,
+    retrievalContext,
     allowOutsideDocumentAnswers,
   }) + " " + buildBehavioralPrompt(behavioralSettings);
 
@@ -110,5 +97,48 @@ export async function POST(request: Request) {
       "Transfer-Encoding": "chunked",
     },
   });
+}
+
+async function buildDocumentContext(docId: string | null, sectionId: string | null) {
+  if (!docId) {
+    return "";
+  }
+
+  const docContent = await getDocumentContentById(docId);
+  if (!docContent) {
+    return "";
+  }
+
+  if (sectionId && docContent.sections?.length) {
+    const section = docContent.sections.find((s) => s.id === sectionId);
+    if (section) {
+      return docContent.rawText.substring(section.startOffset, section.endOffset);
+    }
+  }
+
+  return docContent.rawText;
+}
+
+async function buildRetrievalContext(message: string, docId: string | null) {
+  if (!isRetrievalContextEnabled()) {
+    return "";
+  }
+
+  const retrievedChunks = await retrieveRelevantChunks(message, {
+    docIds: docId ? [docId] : undefined,
+    topK: 4,
+  });
+
+  if (!retrievedChunks.length) {
+    return "";
+  }
+
+  return retrievedChunks
+    .map(
+      (chunk, index) =>
+        `[#${index + 1} | ${chunk.score.toFixed(3)} | ${chunk.docId}]
+${chunk.content}`,
+    )
+    .join("\n\n---\n\n");
 }
 
