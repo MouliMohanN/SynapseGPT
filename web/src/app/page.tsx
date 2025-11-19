@@ -2,7 +2,7 @@
 
 // web/src/app/page.tsx
 import React, { useEffect, useRef, useState } from "react";
-import type { ChatMessage, DocNode, DocumentContent } from "@/lib/types";
+import type { ChatMessage, DocNode } from "@/lib/types";
 import { SettingsModal } from "@/components/SettingsModal";
 import { DocumentPanel } from "@/components/home/DocumentPanel";
 import { ContentPanel } from "@/components/home/ContentPanel";
@@ -10,19 +10,32 @@ import { ChatPanel } from "@/components/home/ChatPanel";
 import { AppHeader } from "@/components/home/AppHeader";
 import { AboutModal } from "@/components/home/AboutModal";
 import { SummarySettingsModal } from "@/components/home/SummarySettingsModal";
-
-const DEFAULT_CONVERSATION_ID = "demo-conversation";
-const CHAT_STORAGE_KEY = "synapsegpt-chat-history";
+import {
+  CHAT_STORAGE_KEY,
+  DEFAULT_CONVERSATION_ID,
+  DEFAULT_SETTINGS,
+  SETTINGS_STORAGE_KEY,
+} from "@/config/constants";
+import { storage } from "@/utils/storage";
+import { useSummary } from "@/hooks/useSummary";
+import { usePanelResize } from "@/hooks/usePanelResize";
+import { useDocuments } from "@/hooks/useDocuments";
+import { sortDocs, filterDocs } from "@/utils/documentUtils";
 
 export default function HomePage() {
-  const [docs, setDocs] = useState<DocNode[]>([]);
-  const [isDocsLoading, setIsDocsLoading] = useState(false);
-  const [docsError, setDocsError] = useState<string | null>(null);
-
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  const [docContent, setDocContent] = useState<DocumentContent | null>(null);
-  const [isDocLoading, setIsDocLoading] = useState(false);
-  const [docError, setDocError] = useState<string | null>(null);
+  const {
+    docs,
+    isDocsLoading,
+    docsError,
+    selectedDocId,
+    setSelectedDocId,
+    docContent,
+    isDocLoading,
+    docError,
+    searchResults,
+    isSearching,
+    runContentSearch,
+  } = useDocuments();
 
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -30,63 +43,73 @@ export default function HomePage() {
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [docFilter, setDocFilter] = useState("");
   const [contentSearch, setContentSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<{docId: string, matches: number}[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [settings, setSettings] = useState({
-    aiModel: "gpt-oss:20b",
-    temperature: 0.7,
-    maxTokens: -1,
-    topP: 0.9,
-    defaultLeftWidth: 20,
-    defaultRightWidth: 25,
-  });
+  const [settings, setSettings] = useState<typeof DEFAULT_SETTINGS>(DEFAULT_SETTINGS);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [streamingCharCount, setStreamingCharCount] = useState(0);
   
-  const [summaryContent, setSummaryContent] = useState<string>("");
-  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summaryPreset, setSummaryPreset] = useState<"quick" | "balanced" | "deep">("balanced");
-  const [summaryDetailLevel, setSummaryDetailLevel] = useState<"overview" | "detailed" | "comprehensive">("detailed");
-  const [summaryTone, setSummaryTone] = useState<"professional" | "casual" | "tutorial">("professional");
-  const [summaryQuestions, setSummaryQuestions] = useState<number>(-1); // -1 means let LLM decide
   const [showSummarySettings, setShowSummarySettings] = useState(false);
-  
+
   const [showSections, setShowSections] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   
-  const [leftPanelWidth, setLeftPanelWidth] = useState(20); // percentage
-  const [rightPanelWidth, setRightPanelWidth] = useState(25); // percentage
-  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
-  const [isDraggingRight, setIsDraggingRight] = useState(false);
-  
+  const {
+    leftWidth: leftPanelWidth,
+    rightWidth: rightPanelWidth,
+    setLeftWidth: setLeftPanelWidth,
+    setRightWidth: setRightPanelWidth,
+    startDraggingLeft,
+    startDraggingRight,
+  } = usePanelResize(DEFAULT_SETTINGS.defaultLeftWidth, DEFAULT_SETTINGS.defaultRightWidth);
+
+  const {
+    content: summaryContent,
+    isLoading: isSummaryLoading,
+    error: summaryError,
+    preset: summaryPreset,
+    detailLevel: summaryDetailLevel,
+    tone: summaryTone,
+    questionCount: summaryQuestions,
+    setPreset: setSummaryPreset,
+    setDetailLevel: setSummaryDetailLevel,
+    setTone: setSummaryTone,
+    setQuestionCount: setSummaryQuestions,
+    generateSummary: runSummary,
+    reset: resetSummary,
+  } = useSummary();
+
+  const triggerSummaryGeneration = React.useCallback((docId?: string | null) => {
+    if (!docId) return;
+    void runSummary(docId);
+  }, [runSummary]);
+
+  const handleManualSummaryGeneration = React.useCallback(() => {
+    triggerSummaryGeneration(selectedDocId);
+  }, [selectedDocId, triggerSummaryGeneration]);
+
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const summaryContentRef = useRef<HTMLDivElement | null>(null);
   const documentViewerRef = useRef<HTMLDivElement | null>(null);
   const documentContentRef = useRef<HTMLDivElement | null>(null);
 
-  // Load chat history from localStorage on mount
+  // Load chat history from storage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(CHAT_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as ChatMessage[];
-        setChatMessages(parsed);
-      } catch {
-        // Ignore parse errors
-      }
+    const storedMessages = storage.get<ChatMessage[]>(CHAT_STORAGE_KEY, []);
+    if (storedMessages.length > 0) {
+      setChatMessages(storedMessages);
     }
   }, []);
 
-  // Save chat history to localStorage whenever it changes
+  // Save chat history whenever it changes
   useEffect(() => {
     if (chatMessages.length > 0) {
-      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatMessages));
+      storage.set(CHAT_STORAGE_KEY, chatMessages);
+    } else {
+      storage.remove(CHAT_STORAGE_KEY);
     }
   }, [chatMessages]);
 
@@ -105,68 +128,14 @@ export default function HomePage() {
     setShouldAutoScroll(isNearBottom);
   };
 
-  // Initial docs load.
-  useEffect(() => {
-    const loadDocs = async () => {
-      try {
-        setIsDocsLoading(true);
-        setDocsError(null);
-        const res = await fetch("/api/docs");
-        if (!res.ok) {
-          throw new Error(`Failed to load docs: ${res.status}`);
-        }
-        const data = (await res.json()) as { docs: DocNode[] };
-        setDocs(data.docs);
-        // Auto-select the first file if available to make the UI feel alive.
-        const firstFile = findFirstFile(data.docs);
-        if (firstFile) {
-          setSelectedDocId(firstFile.id);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        setDocsError(message);
-      } finally {
-        setIsDocsLoading(false);
-      }
-    };
-
-    void loadDocs();
-  }, []);
-
-  // Load document content when selection changes.
+  // Reset summary when doc changes
   useEffect(() => {
     if (!selectedDocId) {
-      setDocContent(null);
-      setSummaryContent("");
-      setSummaryError(null);
+      resetSummary();
       return;
     }
-
-    const loadDoc = async () => {
-      try {
-        setIsDocLoading(true);
-        setDocError(null);
-        const encodedId = encodeURIComponent(selectedDocId);
-        const res = await fetch(`/api/docs/${encodedId}`);
-        if (!res.ok) {
-          throw new Error(`Failed to load document: ${res.status}`);
-        }
-        const data = (await res.json()) as DocumentContent;
-        setDocContent(data);
-        
-        // Auto-generate summary when document loads
-        handleGenerateSummary();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        setDocError(message);
-      } finally {
-        setIsDocLoading(false);
-      }
-    };
-
-    void loadDoc();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDocId]);
+    triggerSummaryGeneration(selectedDocId);
+  }, [selectedDocId, triggerSummaryGeneration, resetSummary]);
 
   // Section navigation handler
   const handleSectionClick = (sectionId: string) => {
@@ -340,7 +309,7 @@ export default function HomePage() {
   const handleClearConversation = () => {
     if (confirm("Clear all chat messages?")) {
       setChatMessages([]);
-      localStorage.removeItem(CHAT_STORAGE_KEY);
+      storage.remove(CHAT_STORAGE_KEY);
     }
   };
 
@@ -373,161 +342,6 @@ export default function HomePage() {
     }
   };
 
-  const handleGenerateSummary = async () => {
-    if (!selectedDocId || isSummaryLoading) return;
-
-    setSummaryContent("");
-    setSummaryError(null);
-    setIsSummaryLoading(true);
-
-    const controller = new AbortController();
-
-    // Configure based on preset
-    const presetConfigs = {
-      quick: {
-        temperature: 0.3,
-        maxTokens: 512,
-        topP: 0.85,
-      },
-      balanced: {
-        temperature: 0.5,
-        maxTokens: 1536,
-        topP: 0.9,
-      },
-      deep: {
-        temperature: 0.7,
-        maxTokens: 3072,
-        topP: 0.95,
-      },
-    };
-
-    const config = presetConfigs[summaryPreset];
-
-    // Build custom message based on detail level, tone, and question settings
-    const detailInstructions = {
-      overview: "Provide a high-level overview focusing on main concepts only.",
-      detailed: "Provide a detailed summary with explanations and examples.",
-      comprehensive: "Provide an exhaustive analysis covering all aspects, edge cases, and nuances.",
-    };
-
-    const toneInstructions = {
-      professional: "Use formal, technical language appropriate for professional documentation.",
-      casual: "Use conversational, easy-to-understand language as if explaining to a colleague.",
-      tutorial: "Use step-by-step teaching style with clear examples and beginner-friendly explanations.",
-    };
-
-    const questionInstruction = summaryQuestions === -1
-      ? "Generate all relevant and important questions with detailed answers."
-      : summaryQuestions > 0
-        ? `Generate exactly ${summaryQuestions} relevant questions with detailed answers.`
-        : "Do not include questions and answers section.";
-
-    const customMessage = `${detailInstructions[summaryDetailLevel]} ${toneInstructions[summaryTone]} ${questionInstruction}`;
-
-    try {
-      const res = await fetch("/api/chat/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversationId: "summary-" + selectedDocId,
-          docId: selectedDocId,
-          sectionId: null,
-          mode: "summary",
-          message: customMessage,
-          modelConfig: {
-            temperature: config.temperature,
-            maxTokens: config.maxTokens,
-            topP: config.topP,
-          },
-        }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok || !res.body) {
-        throw new Error(`Summary request failed: ${res.status}`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-
-      let done = false;
-      let accumulatedContent = "";
-      
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          accumulatedContent += chunk;
-          setSummaryContent(accumulatedContent);
-        }
-      }
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        setSummaryError(message);
-      }
-    } finally {
-      setIsSummaryLoading(false);
-    }
-  };
-
-  const sortDocs = (nodes: DocNode[]): DocNode[] => {
-    return nodes
-      .map(node => {
-        if (node.type === "folder" && node.children) {
-          return {
-            ...node,
-            children: sortDocs(node.children)
-          };
-        }
-        return node;
-      })
-      .sort((a, b) => {
-        // Folders first, then files
-        if (a.type === "folder" && b.type === "file") return -1;
-        if (a.type === "file" && b.type === "folder") return 1;
-        // Alphabetically by name
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      });
-  };
-
-  const filterDocs = (nodes: DocNode[], query: string): DocNode[] => {
-    if (!query.trim()) return nodes;
-    const lowerQuery = query.toLowerCase();
-
-    const matches = (node: DocNode): boolean => {
-      const fullPath = node.path || node.name;
-      return (
-        node.name.toLowerCase().includes(lowerQuery) ||
-        fullPath.toLowerCase().includes(lowerQuery)
-      );
-    };
-
-    const recurse = (node: DocNode): DocNode | null => {
-      if (node.type === "file") {
-        return matches(node) ? node : null;
-      }
-
-      const filteredChildren = (node.children || [])
-        .map(recurse)
-        .filter((child): child is DocNode => child !== null);
-
-      if (filteredChildren.length > 0 || matches(node)) {
-        return {
-          ...node,
-          children: filteredChildren,
-        };
-      }
-
-      return null;
-    };
-
-    return nodes
-      .map(recurse)
-      .filter((node): node is DocNode => node !== null);
-  };
-
   const visibleDocs = sortDocs(filterDocs(docs, docFilter));
   const toggleFolder = (id: string) => {
     setExpandedFolders((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -535,100 +349,23 @@ export default function HomePage() {
 
   // Full-text search across all documents
   const handleContentSearch = async () => {
-    if (!contentSearch.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-    const results: {docId: string, matches: number}[] = [];
-    const searchLower = contentSearch.toLowerCase();
-
-    // Search through all loaded documents
-    for (const doc of docs) {
-      if (doc.type === "file") {
-        try {
-          const encodedId = encodeURIComponent(doc.id);
-          const res = await fetch(`/api/docs/${encodedId}`);
-          if (res.ok) {
-            const data = (await res.json()) as DocumentContent;
-            const matches = (data.rawText.toLowerCase().match(new RegExp(searchLower, 'g')) || []).length;
-            if (matches > 0) {
-              results.push({ docId: doc.id, matches });
-            }
-          }
-        } catch {
-          // Skip errors for individual documents
-        }
-      }
-    }
-
-    setSearchResults(results.sort((a, b) => b.matches - a.matches));
-    setIsSearching(false);
+    void runContentSearch(contentSearch);
   };
 
   const handleSaveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
     setLeftPanelWidth(newSettings.defaultLeftWidth);
     setRightPanelWidth(newSettings.defaultRightWidth);
-    localStorage.setItem('synapsegpt-settings', JSON.stringify(newSettings));
+    storage.set(SETTINGS_STORAGE_KEY, newSettings);
   };
 
   // Load settings from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem('synapsegpt-settings');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setSettings(parsed);
-        setLeftPanelWidth(parsed.defaultLeftWidth || 20);
-        setRightPanelWidth(parsed.defaultRightWidth || 25);
-      } catch {
-        // Ignore parse errors
-      }
-    }
-  }, []);
-
-  const handleMouseMoveLeft = React.useCallback((e: MouseEvent) => {
-    const newWidth = (e.clientX / window.innerWidth) * 100;
-    if (newWidth >= 10 && newWidth <= 40) {
-      setLeftPanelWidth(newWidth);
-    }
-  }, []);
-
-  const handleMouseMoveRight = React.useCallback((e: MouseEvent) => {
-    const newWidth = ((window.innerWidth - e.clientX) / window.innerWidth) * 100;
-    if (newWidth >= 15 && newWidth <= 50) {
-      setRightPanelWidth(newWidth);
-    }
-  }, []);
-
-  const handleMouseUp = React.useCallback(() => {
-    setIsDraggingLeft(false);
-    setIsDraggingRight(false);
-  }, []);
-
-  useEffect(() => {
-    if (isDraggingLeft) {
-      window.addEventListener('mousemove', handleMouseMoveLeft as EventListener);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMoveLeft as EventListener);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDraggingLeft, handleMouseMoveLeft, handleMouseUp]);
-
-  useEffect(() => {
-    if (isDraggingRight) {
-      window.addEventListener('mousemove', handleMouseMoveRight as EventListener);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMoveRight as EventListener);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDraggingRight, handleMouseMoveRight, handleMouseUp]);
+    const storedSettings = storage.get<typeof DEFAULT_SETTINGS>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS);
+    setSettings(storedSettings);
+    setLeftPanelWidth(storedSettings.defaultLeftWidth ?? DEFAULT_SETTINGS.defaultLeftWidth);
+    setRightPanelWidth(storedSettings.defaultRightWidth ?? DEFAULT_SETTINGS.defaultRightWidth);
+  }, [setLeftPanelWidth, setRightPanelWidth]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden">
@@ -657,7 +394,7 @@ export default function HomePage() {
         {/* Resize handle for left panel */}
         <div
           className="w-1 bg-slate-300 hover:bg-purple-500 cursor-col-resize transition-colors shrink-0"
-          onMouseDown={() => setIsDraggingLeft(true)}
+          onMouseDown={startDraggingLeft}
         />
 
         <ContentPanel
@@ -677,7 +414,7 @@ export default function HomePage() {
           summaryContent={summaryContent}
           isSummaryLoading={isSummaryLoading}
           onOpenSummarySettings={() => setShowSummarySettings(true)}
-          onGenerateSummary={handleGenerateSummary}
+          onGenerateSummary={handleManualSummaryGeneration}
           docError={docError}
           isDocLoading={isDocLoading}
         />
@@ -685,7 +422,7 @@ export default function HomePage() {
         {/* Resize handle for right panel */}
         <div
           className="w-1 bg-slate-800 hover:bg-sky-500 cursor-col-resize transition-colors shrink-0"
-          onMouseDown={() => setIsDraggingRight(true)}
+          onMouseDown={startDraggingRight}
         />
 
         <ChatPanel
@@ -730,21 +467,9 @@ export default function HomePage() {
         onDetailLevelChange={setSummaryDetailLevel}
         onToneChange={setSummaryTone}
         onQuestionCountChange={setSummaryQuestions}
-        onGenerate={handleGenerateSummary}
+        onGenerate={handleManualSummaryGeneration}
       />
     </div>
   );
 }
 
-function findFirstFile(nodes: DocNode[]): DocNode | null {
-  for (const node of nodes) {
-    if (node.type === "file") {
-      return node;
-    }
-    if (node.children) {
-      const found = findFirstFile(node.children);
-      if (found) return found;
-    }
-  }
-  return null;
-}
