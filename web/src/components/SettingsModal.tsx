@@ -7,21 +7,53 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: {
     aiModel: string;
-    temperature: number;
-    maxTokens: number;
-    topP: number;
     defaultLeftWidth: number;
     defaultRightWidth: number;
+    chatBehavioralSettings: {
+      detailLevel: "overview" | "detailed" | "comprehensive";
+      tone: "professional" | "casual" | "tutorial";
+      generateQuestions: number;
+    };
+    summaryBehavioralSettings: {
+      detailLevel: "overview" | "detailed" | "comprehensive";
+      tone: "professional" | "casual" | "tutorial";
+      generateQuestions: number;
+    };
   };
   onSave: (settings: SettingsModalProps["settings"]) => void;
 }
 
+type SettingsTab = "chat" | "summary";
+
+type BehavioralSettingsType = {
+  detailLevel: "overview" | "detailed" | "comprehensive";
+  tone: "professional" | "casual" | "tutorial";
+  generateQuestions: number;
+};
+
 export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsModalProps) {
   const [localSettings, setLocalSettings] = React.useState(settings);
+  const [activeTab, setActiveTab] = React.useState<SettingsTab>("chat");
 
   React.useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
+
+  const updateBehavioralSetting = (
+    tab: SettingsTab,
+    key: keyof BehavioralSettingsType,
+    value: any
+  ) => {
+    const settingsKey = `${tab}BehavioralSettings` as keyof SettingsModalProps["settings"];
+    const currentSettings = localSettings[settingsKey] as BehavioralSettingsType;
+    setLocalSettings({
+      ...localSettings,
+      [settingsKey]: {
+        ...currentSettings,
+        [key]: value,
+      },
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -48,14 +80,39 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
 
         <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
           <p className="text-xs text-purple-900 leading-relaxed">
-            💬 <span className="font-semibold">Chat Configuration</span>
+            💬 <span className="font-semibold">AI Configuration</span>
           </p>
           <p className="text-[10px] text-purple-700 mt-1">
-            These settings apply only to chat messages. AI Summary uses preset modes (Quick/Balanced/Deep).
+            Configure separate behavioral settings for Chat and AI Summary features.
           </p>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="flex mb-4 border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab("chat")}
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+              activeTab === "chat"
+                ? "text-purple-600 border-purple-600"
+                : "text-slate-600 border-transparent hover:text-slate-900"
+            }`}
+          >
+            Chat Settings
+          </button>
+          <button
+            onClick={() => setActiveTab("summary")}
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+              activeTab === "summary"
+                ? "text-purple-600 border-purple-600"
+                : "text-slate-600 border-transparent hover:text-slate-900"
+            }`}
+          >
+            AI Summary Settings
+          </button>
+        </div>
+
         <div className="space-y-4">
+          {/* AI Model - shared */}
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">
               AI Model
@@ -69,69 +126,256 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
             <p className="text-[10px] text-slate-600 mt-1">Ollama model name (e.g., gpt-oss:20b)</p>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Temperature: {localSettings.temperature.toFixed(1)}
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={localSettings.temperature}
-              onChange={(e) => setLocalSettings({ ...localSettings, temperature: parseFloat(e.target.value) })}
-              className="w-full accent-purple-600"
-            />
-            <div className="flex justify-between text-[10px] text-slate-600 mt-1">
-              <span>Precise (0.0)</span>
-              <span>Balanced (1.0)</span>
-              <span>Creative (2.0)</span>
-            </div>
-            <p className="text-[10px] text-slate-500 mt-1">💡 Lower = more focused/factual, Higher = more creative</p>
-          </div>
+          {/* Tab-specific settings */}
+          {activeTab === "chat" && (
+            <>
+              <div className="text-sm font-medium text-slate-900 mb-3">Chat Behavior</div>
+              {/* Detail Level */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Detail Level</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "detailLevel", "overview")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.detailLevel === "overview"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
+                    }`}
+                  >
+                    Overview
+                    <div className="text-[9px] opacity-75 mt-0.5">High-level</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "detailLevel", "detailed")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.detailLevel === "detailed"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
+                    }`}
+                  >
+                    Detailed
+                    <div className="text-[9px] opacity-75 mt-0.5">With examples</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "detailLevel", "comprehensive")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.detailLevel === "comprehensive"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
+                    }`}
+                  >
+                    Comprehensive
+                    <div className="text-[9px] opacity-75 mt-0.5">Exhaustive</div>
+                  </button>
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Max Response Length: {localSettings.maxTokens === -1 ? "Unlimited" : localSettings.maxTokens}
-            </label>
-            <input
-              type="range"
-              min="-1"
-              max="4096"
-              step="256"
-              value={localSettings.maxTokens}
-              onChange={(e) => setLocalSettings({ ...localSettings, maxTokens: parseInt(e.target.value) })}
-              className="w-full accent-purple-600"
-            />
-            <div className="flex justify-between text-[10px] text-slate-600 mt-1">
-              <span>Unlimited</span>
-              <span>Short</span>
-              <span>Medium</span>
-              <span>Long</span>
-            </div>
-            <p className="text-[10px] text-slate-500 mt-1">💡 Controls maximum length of AI responses</p>
-          </div>
+              {/* Tone */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Tone</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "tone", "professional")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.tone === "professional"
+                        ? "bg-blue-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
+                    }`}
+                  >
+                    Professional
+                    <div className="text-[9px] opacity-75 mt-0.5">Formal</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "tone", "casual")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.tone === "casual"
+                        ? "bg-blue-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
+                    }`}
+                  >
+                    Casual
+                    <div className="text-[9px] opacity-75 mt-0.5">Conversational</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "tone", "tutorial")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.tone === "tutorial"
+                        ? "bg-blue-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
+                    }`}
+                  >
+                    Tutorial
+                    <div className="text-[9px] opacity-75 mt-0.5">Educational</div>
+                  </button>
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Focus (Top P): {localSettings.topP.toFixed(2)}
-            </label>
-            <input
-              type="range"
-              min="0.5"
-              max="1"
-              step="0.05"
-              value={localSettings.topP}
-              onChange={(e) => setLocalSettings({ ...localSettings, topP: parseFloat(e.target.value) })}
-              className="w-full accent-purple-600"
-            />
-            <div className="flex justify-between text-[10px] text-slate-600 mt-1">
-              <span>Narrow (0.5)</span>
-              <span>Recommended (0.9)</span>
-              <span>Wide (1.0)</span>
-            </div>
-            <p className="text-[10px] text-slate-500 mt-1">💡 Lower = more focused, Higher = more diverse vocabulary</p>
-          </div>
+              {/* Question Generation */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Question Generation</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "generateQuestions", 0)}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.generateQuestions === 0
+                        ? "bg-green-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
+                    }`}
+                  >
+                    None
+                    <div className="text-[9px] opacity-75 mt-0.5">No questions</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "generateQuestions", -1)}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.generateQuestions === -1
+                        ? "bg-green-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
+                    }`}
+                  >
+                    Auto
+                    <div className="text-[9px] opacity-75 mt-0.5">AI decides</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("chat", "generateQuestions", 5)}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.chatBehavioralSettings.generateQuestions === 5
+                        ? "bg-green-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
+                    }`}
+                  >
+                    5 Questions
+                    <div className="text-[9px] opacity-75 mt-0.5">Fixed count</div>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === "summary" && (
+            <>
+              <div className="text-sm font-medium text-slate-900 mb-3">AI Summary Behavior</div>
+              {/* Detail Level */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Detail Level</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "detailLevel", "overview")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.detailLevel === "overview"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
+                    }`}
+                  >
+                    Overview
+                    <div className="text-[9px] opacity-75 mt-0.5">High-level</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "detailLevel", "detailed")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.detailLevel === "detailed"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
+                    }`}
+                  >
+                    Detailed
+                    <div className="text-[9px] opacity-75 mt-0.5">With examples</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "detailLevel", "comprehensive")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.detailLevel === "comprehensive"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
+                    }`}
+                  >
+                    Comprehensive
+                    <div className="text-[9px] opacity-75 mt-0.5">Exhaustive</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Tone */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Tone</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "tone", "professional")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.tone === "professional"
+                        ? "bg-blue-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
+                    }`}
+                  >
+                    Professional
+                    <div className="text-[9px] opacity-75 mt-0.5">Formal</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "tone", "casual")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.tone === "casual"
+                        ? "bg-blue-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
+                    }`}
+                  >
+                    Casual
+                    <div className="text-[9px] opacity-75 mt-0.5">Conversational</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "tone", "tutorial")}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.tone === "tutorial"
+                        ? "bg-blue-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
+                    }`}
+                  >
+                    Tutorial
+                    <div className="text-[9px] opacity-75 mt-0.5">Educational</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Question Generation */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Question Generation</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "generateQuestions", 0)}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.generateQuestions === 0
+                        ? "bg-green-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
+                    }`}
+                  >
+                    None
+                    <div className="text-[9px] opacity-75 mt-0.5">No questions</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "generateQuestions", -1)}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.generateQuestions === -1
+                        ? "bg-green-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
+                    }`}
+                  >
+                    Auto
+                    <div className="text-[9px] opacity-75 mt-0.5">AI decides</div>
+                  </button>
+                  <button
+                    onClick={() => updateBehavioralSetting("summary", "generateQuestions", 5)}
+                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                      localSettings.summaryBehavioralSettings.generateQuestions === 5
+                        ? "bg-green-500 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
+                    }`}
+                  >
+                    5 Questions
+                    <div className="text-[9px] opacity-75 mt-0.5">Fixed count</div>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="border-t border-slate-200 pt-4 mt-4">
             <p className="text-xs font-medium text-slate-700 mb-3">Panel Layout</p>

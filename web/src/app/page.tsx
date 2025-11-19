@@ -7,6 +7,7 @@ import rehypeRaw from "rehype-raw";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { prism } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { ChatMessage, DocNode, DocumentContent } from "@/lib/types";
+import { buildBehavioralPrompt } from "@/lib/chat/settingsMapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Logo } from "@/components/Logo";
 import { DocumentTreeSkeleton, DocumentViewerSkeleton, SummarySkeleton } from "@/components/Skeleton";
@@ -37,11 +38,18 @@ export default function HomePage() {
   const [showAbout, setShowAbout] = useState(false);
   const [settings, setSettings] = useState({
     aiModel: "gpt-oss:20b",
-    temperature: 0.7,
-    maxTokens: -1,
-    topP: 0.9,
     defaultLeftWidth: 20,
     defaultRightWidth: 25,
+    chatBehavioralSettings: {
+      detailLevel: "overview" as "overview" | "detailed" | "comprehensive",
+      tone: "tutorial" as "professional" | "casual" | "tutorial",
+      generateQuestions: 0,
+    },
+    summaryBehavioralSettings: {
+      detailLevel: "detailed" as "overview" | "detailed" | "comprehensive",
+      tone: "professional" as "professional" | "casual" | "tutorial",
+      generateQuestions: -1,
+    },
   });
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -50,10 +58,6 @@ export default function HomePage() {
   const [summaryContent, setSummaryContent] = useState<string>("");
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summaryPreset, setSummaryPreset] = useState<"quick" | "balanced" | "deep">("balanced");
-  const [summaryDetailLevel, setSummaryDetailLevel] = useState<"overview" | "detailed" | "comprehensive">("detailed");
-  const [summaryTone, setSummaryTone] = useState<"professional" | "casual" | "tutorial">("professional");
-  const [summaryQuestions, setSummaryQuestions] = useState<number>(-1); // -1 means let LLM decide
   const [showSummarySettings, setShowSummarySettings] = useState(false);
   
   const [showSections, setShowSections] = useState(true);
@@ -263,11 +267,7 @@ export default function HomePage() {
           docId: selectedDocId,
           sectionId: selectedSectionId,
           message: userMessage.content,
-          modelConfig: {
-            temperature: settings.temperature,
-            maxTokens: settings.maxTokens,
-            topP: settings.topP,
-          },
+          behavioralSettings: settings.chatBehavioralSettings,
         }),
         signal: controller.signal,
       });
@@ -373,53 +373,17 @@ export default function HomePage() {
   const handleGenerateSummary = async () => {
     if (!selectedDocId || isSummaryLoading) return;
 
+    console.log("Starting summary generation for doc:", selectedDocId);
     setSummaryContent("");
     setSummaryError(null);
     setIsSummaryLoading(true);
 
     const controller = new AbortController();
+    setAbortController(controller);
 
-    // Configure based on preset
-    const presetConfigs = {
-      quick: {
-        temperature: 0.3,
-        maxTokens: 512,
-        topP: 0.85,
-      },
-      balanced: {
-        temperature: 0.5,
-        maxTokens: 1536,
-        topP: 0.9,
-      },
-      deep: {
-        temperature: 0.7,
-        maxTokens: 3072,
-        topP: 0.95,
-      },
-    };
-
-    const config = presetConfigs[summaryPreset];
-
-    // Build custom message based on detail level, tone, and question settings
-    const detailInstructions = {
-      overview: "Provide a high-level overview focusing on main concepts only.",
-      detailed: "Provide a detailed summary with explanations and examples.",
-      comprehensive: "Provide an exhaustive analysis covering all aspects, edge cases, and nuances.",
-    };
-
-    const toneInstructions = {
-      professional: "Use formal, technical language appropriate for professional documentation.",
-      casual: "Use conversational, easy-to-understand language as if explaining to a colleague.",
-      tutorial: "Use step-by-step teaching style with clear examples and beginner-friendly explanations.",
-    };
-
-    const questionInstruction = summaryQuestions === -1
-      ? "Generate all relevant and important questions with detailed answers."
-      : summaryQuestions > 0
-        ? `Generate exactly ${summaryQuestions} relevant questions with detailed answers.`
-        : "Do not include questions and answers section.";
-
-    const customMessage = `${detailInstructions[summaryDetailLevel]} ${toneInstructions[summaryTone]} ${questionInstruction}`;
+    const customMessage = buildBehavioralPrompt(settings.summaryBehavioralSettings);
+    console.log("Summary message:", customMessage);
+    console.log("Summary settings:", settings.summaryBehavioralSettings);
 
     try {
       const res = await fetch("/api/chat/stream", {
@@ -430,15 +394,12 @@ export default function HomePage() {
           docId: selectedDocId,
           sectionId: null,
           message: customMessage,
-          modelConfig: {
-            temperature: config.temperature,
-            maxTokens: config.maxTokens,
-            topP: config.topP,
-          },
+          behavioralSettings: settings.summaryBehavioralSettings,
         }),
         signal: controller.signal,
       });
 
+      console.log("Response received:", res.status, res.ok);
       if (!res.ok || !res.body) {
         throw new Error(`Summary request failed: ${res.status}`);
       }
@@ -448,23 +409,31 @@ export default function HomePage() {
 
       let done = false;
       let accumulatedContent = "";
+      let chunkCount = 0;
       
+      console.log("Starting stream reading...");
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
+        chunkCount++;
+        console.log(`Chunk ${chunkCount}: done=${done}, value length=${value?.length || 0}`);
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
+          const chunk = decoder.decode(value);
           accumulatedContent += chunk;
           setSummaryContent(accumulatedContent);
         }
       }
+      console.log("Stream completed after", chunkCount, "chunks");
     } catch (err) {
+      console.error("Summary generation error:", err);
       if ((err as Error).name !== 'AbortError') {
         const message = err instanceof Error ? err.message : "Unknown error";
         setSummaryError(message);
       }
     } finally {
+      console.log("Finally block - setting loading to false");
       setIsSummaryLoading(false);
+      setAbortController(null);
     }
   };
 
@@ -1371,179 +1340,10 @@ export default function HomePage() {
             </div>
 
             <div className="space-y-4">
-              {/* Speed Preset */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Speed Preset</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSummaryPreset("quick")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryPreset === "quick"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
-                    }`}
-                  >
-                    ⚡ Quick
-                    <div className="text-[9px] opacity-75 mt-0.5">512 tokens</div>
-                  </button>
-                  <button
-                    onClick={() => setSummaryPreset("balanced")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryPreset === "balanced"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
-                    }`}
-                  >
-                    ⚖️ Balanced
-                    <div className="text-[9px] opacity-75 mt-0.5">1536 tokens</div>
-                  </button>
-                  <button
-                    onClick={() => setSummaryPreset("deep")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryPreset === "deep"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
-                    }`}
-                  >
-                    🔬 Deep
-                    <div className="text-[9px] opacity-75 mt-0.5">3072 tokens</div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Detail Level */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Detail Level</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSummaryDetailLevel("overview")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryDetailLevel === "overview"
-                        ? "bg-amber-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
-                    }`}
-                  >
-                    Overview
-                  </button>
-                  <button
-                    onClick={() => setSummaryDetailLevel("detailed")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryDetailLevel === "detailed"
-                        ? "bg-amber-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
-                    }`}
-                  >
-                    Detailed
-                  </button>
-                  <button
-                    onClick={() => setSummaryDetailLevel("comprehensive")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryDetailLevel === "comprehensive"
-                        ? "bg-amber-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-amber-50 border border-slate-300"
-                    }`}
-                  >
-                    Comprehensive
-                  </button>
-                </div>
-              </div>
-
-              {/* Tone */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Writing Tone</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSummaryTone("professional")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryTone === "professional"
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
-                    }`}
-                  >
-                    📊 Professional
-                  </button>
-                  <button
-                    onClick={() => setSummaryTone("casual")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryTone === "casual"
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
-                    }`}
-                  >
-                    💬 Casual
-                  </button>
-                  <button
-                    onClick={() => setSummaryTone("tutorial")}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
-                      summaryTone === "tutorial"
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-300"
-                    }`}
-                  >
-                    📚 Tutorial
-                  </button>
-                </div>
-              </div>
-
-              {/* Questions */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">
-                  Questions: {summaryQuestions === -1 ? 'All (LLM decides)' : summaryQuestions === 0 ? 'None' : summaryQuestions}
-                </label>
-                <div className="flex gap-2 mb-2">
-                  <button
-                    onClick={() => setSummaryQuestions(0)}
-                    className={`px-3 py-1.5 text-xs rounded transition-all ${
-                      summaryQuestions === 0
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
-                    }`}
-                  >
-                    None
-                  </button>
-                  <button
-                    onClick={() => setSummaryQuestions(5)}
-                    className={`px-3 py-1.5 text-xs rounded transition-all ${
-                      summaryQuestions === 5
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
-                    }`}
-                  >
-                    Few (5)
-                  </button>
-                  <button
-                    onClick={() => setSummaryQuestions(10)}
-                    className={`px-3 py-1.5 text-xs rounded transition-all ${
-                      summaryQuestions === 10
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
-                    }`}
-                  >
-                    Many (10)
-                  </button>
-                  <button
-                    onClick={() => setSummaryQuestions(-1)}
-                    className={`px-3 py-1.5 text-xs rounded transition-all ${
-                      summaryQuestions === -1
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-white text-slate-700 hover:bg-green-50 border border-slate-300"
-                    }`}
-                  >
-                    All
-                  </button>
-                </div>
-                {summaryQuestions > 0 && summaryQuestions !== -1 && (
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    step="1"
-                    value={summaryQuestions}
-                    onChange={(e) => setSummaryQuestions(parseInt(e.target.value))}
-                    className="w-full accent-green-600"
-                  />
-                )}
-              </div>
+              <p className="text-sm text-slate-600">
+                AI Summary now uses the unified settings from the main Settings panel.
+                Configure detail level, tone, and question generation there.
+              </p>
             </div>
 
             <div className="flex gap-2 mt-6">

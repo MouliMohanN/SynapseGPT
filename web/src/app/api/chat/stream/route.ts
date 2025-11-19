@@ -5,14 +5,23 @@ import { getConversationHistory, updateConversationHistory } from "@/lib/chat/co
 import { streamOllamaResponse } from "@/lib/chat/ollamaClient";
 import { buildSystemPrompt } from "@/lib/chat/promptBuilder";
 import { formatAssistantResponse } from "@/lib/chat/formatters";
+import { behavioralToModelConfig, buildBehavioralPrompt } from "@/lib/chat/settingsMapper";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as ChatRequestBody;
-  const { conversationId, docId, sectionId, message, modelConfig } = body;
+  const { conversationId, docId, sectionId, message, behavioralSettings } = body;
 
   if (!conversationId || !message) {
     return NextResponse.json(
       { error: "conversationId and message are required" },
+      { status: 400 },
+    );
+  }
+
+  // Validate behavioralSettings
+  if (!behavioralSettings) {
+    return NextResponse.json(
+      { error: "behavioralSettings is required" },
       { status: 400 },
     );
   }
@@ -42,7 +51,9 @@ export async function POST(request: Request) {
     docId: docId ?? null,
     sectionId: sectionId ?? null,
     documentContext,
-  });
+  }) + " " + buildBehavioralPrompt(behavioralSettings);
+
+  const modelConfig = behavioralToModelConfig(behavioralSettings);
 
   const encoder = new TextEncoder();
 
@@ -74,6 +85,7 @@ export async function POST(request: Request) {
           formattedContent,
         );
       } catch (err) {
+        console.error("Stream error:", err);
         const errorMessage =
           err instanceof Error ? err.message : "Unknown error";
         const fallback = `Error calling local LLM: ${errorMessage}`;

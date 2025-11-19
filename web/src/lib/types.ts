@@ -43,9 +43,9 @@ export interface ChatRequestBody {
   docId: string;
   sectionId?: string | null;
   message: string;
-  modelConfig?: {
-    temperature?: number;
-    maxTokens?: number;
-    topP?: number;
+  behavioralSettings: {
+    detailLevel: "overview" | "detailed" | "comprehensive";
+    tone: "professional" | "casual" | "tutorial";
+    generateQuestions: number;
   };
 }
