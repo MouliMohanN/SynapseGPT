@@ -105,5 +105,73 @@ During the setup of Phase 2, we encountered several environment hurdles. Here is
 
 ---
 
-## Phase 3: Retrieval Integration (Coming Next)
-We will update the chat API (`route.ts`) to query ChromaDB instead of the old in-memory index. This will connect the "brain" (LLM) to our new "long-term memory" (Vector DB).
+## Phase 3: Retrieval Integration
+
+### **1. What we did**
+We connected the Chat API to our new Vector Database.
+1.  **Created Adapter**: Built `web/src/lib/rag/vectorRetriever.ts` to handle querying ChromaDB using LangChain.
+2.  **Updated API**: Modified `route.ts` to use `vectorRetriever` instead of the old `simpleRetriever`.
+3.  **Verified**: Ran a test script (`scripts/test-retrieval.ts`) to prove we can fetch relevant chunks.
+
+### **2. Why we did it**
+- **Separation of Concerns**: The `vectorRetriever` hides the complexity of ChromaDB/LangChain from the main chat logic.
+- **Live Data**: The chat now uses the persistent index we built in Phase 2, meaning it can access all 26 documents instantly.
+
+### **3. How we did it**
+We swapped the import in `route.ts`:
+```typescript
+// Old
+import { retrieveRelevantChunks } from "@/lib/rag/simpleRetriever";
+
+// New
+import { retrieveRelevantChunks } from "@/lib/rag/vectorRetriever";
+```
+
+### **4. Verification Commands**
+We verified the system at multiple levels:
+
+**A. Check ChromaDB Server Status**
+```bash
+curl http://localhost:8000/api/v2/heartbeat
+# Output: {"nanosecond heartbeat": ...}
+```
+
+**B. Test Vector Retrieval Script**
+```bash
+npx tsx scripts/test-retrieval.ts
+# Output: ✅ Found 2 results...
+```
+
+**C. Verify Git Ignore Rules**
+```bash
+git check-ignore -v venv/bin/activate
+# Output: .gitignore:5:venv/	venv/bin/activate
+```
+
+---
+
+## Phase 4: Cleanup
+
+### **1. What we did**
+We removed the legacy code that is no longer needed.
+
+### **2. Command Executed**
+```bash
+rm web/src/lib/rag/simpleRetriever.ts
+```
+
+### **3. Why we did it**
+- **Technical Debt**: Keeping old, unused code confuses developers and bloats the project.
+- **Confidence**: Deleting the old system proves we are fully committed to and confident in the new Vector DB architecture.
+
+---
+
+## Conclusion
+The migration is complete! SynapseGPT now runs on a modern, scalable **Vector Database** architecture while remaining **100% local**.
+
+### Architecture Summary
+- **Database**: ChromaDB (Local)
+- **Embeddings**: Nomic Embed Text (via Ollama)
+- **Orchestration**: LangChain
+- **Frontend**: Next.js (via `vectorRetriever`)
+

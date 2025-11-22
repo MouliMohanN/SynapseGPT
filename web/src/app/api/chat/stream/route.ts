@@ -6,7 +6,7 @@ import { streamOllamaResponse } from "@/lib/chat/ollamaClient";
 import { buildSystemPrompt } from "@/lib/chat/promptBuilder";
 import { formatAssistantResponse } from "@/lib/chat/formatters";
 import { behavioralToModelConfig, buildBehavioralPrompt } from "@/lib/chat/settingsMapper";
-import { retrieveRelevantChunks } from "@/lib/rag/simpleRetriever";
+import { retrieveRelevantChunks } from "@/lib/rag/vectorRetriever";
 import { isRetrievalContextEnabled } from "@/lib/featureFlags";
 
 export async function POST(request: Request) {
@@ -133,10 +133,7 @@ async function buildRetrievalContext(message: string, docId: string | null) {
     return "";
   }
 
-  const retrievedChunks = await retrieveRelevantChunks(message, {
-    docIds: docId ? [docId] : undefined,
-    topK: 4,
-  });
+  const retrievedChunks = await retrieveRelevantChunks(message, 4);
 
   if (!retrievedChunks.length) {
     return "";
@@ -145,7 +142,7 @@ async function buildRetrievalContext(message: string, docId: string | null) {
   return retrievedChunks
     .map(
       (chunk, index) =>
-        `Source: ${chunk.docName}\nContent: ${chunk.content}`,
+        `Source: ${chunk.metadata.docName || chunk.metadata.source}\nContent: ${chunk.content}`,
     )
     .join("\n\n---\n\n");
 }
