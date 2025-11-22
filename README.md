@@ -10,6 +10,11 @@ SynapseGPT is a **local-first**, privacy-focused AI chat application designed to
 - **🔎 Semantic Search**: Uses **ChromaDB** (Vector Database) to understand the *meaning* of your queries, not just keyword matching.
 - **📚 Smart Citations**: Every answer includes precise citations pointing back to the source document.
 - **⚡ Real-time Streaming**: Fast, streaming responses for a fluid chat experience.
+- **📝 Intelligent Document Editor**:
+    - **Ghost Text Autocomplete**: AI-powered inline code/text completion as you type (Tab to accept, Esc to reject).
+    - **Rich Formatting**: Toolbar for Bold, Italic, Lists, Tables, Images, and more.
+    - **View Modes**: Switch between **Edit**, **Preview**, and **Split View** (Side-by-Side).
+    - **Zen Mode**: Full-screen distraction-free writing experience.
 - **📄 Multi-Format Support**: Upload and process PDF, Word, PowerPoint, Excel, HTML, images, and Markdown files.
 - **🤖 AI-Powered Conversion**: Uses [Docling](https://github.com/docling-project/docling) to convert documents to high-quality Markdown with preserved structure.
 - **📤 Drag-and-Drop Upload**: Easy file and folder uploads with automatic conversion and ingestion.
@@ -61,8 +66,21 @@ SynapseGPT/
 - **Ollama** (Installed and running)
 - **Python 3.11** (Crucial for ChromaDB compatibility)
 
+> [!IMPORTANT]
+> **Enable Parallel Requests in Ollama**
+> By default, Ollama processes one request at a time. To use **Autocomplete** while chatting or generating summaries, you must enable parallel requests.
+>
+> **Mac/Linux**:
+> ```bash
+> OLLAMA_NUM_PARALLEL=4 ollama serve
+> ```
+> **Windows (PowerShell)**:
+> ```powershell
+> $env:OLLAMA_NUM_PARALLEL=4; ollama serve
+> ```
+
 ### 1. Setup AI Models
-Ensure Ollama is running, then pull the required models:
+Ensure Ollama is running (ideally with parallel requests enabled), then pull the required models:
 ```bash
 ollama pull gpt-oss:20b  # Or your preferred chat model
 ollama pull nomic-embed-text
@@ -103,6 +121,26 @@ Open [http://localhost:3000](http://localhost:3000) to start chatting!
 
 ---
 
+## 📝 Using the Editor
+
+The built-in document editor offers a powerful writing experience:
+
+### Autocomplete (Ghost Text)
+- As you type, the AI suggests completions in grey text.
+- **Accept**: Press `Tab`.
+- **Reject**: Press `Esc` or keep typing.
+
+### View Modes
+- **Edit**: Standard code editor with syntax highlighting.
+- **Preview**: Rendered Markdown view to see how your document looks.
+- **Split**: Side-by-side view to edit and preview simultaneously.
+
+### Zen Mode
+- Click the **Full Screen** icon (arrows) in the toolbar to enter a distraction-free writing mode.
+- Press `Esc` or click "Exit Full Screen" to return.
+
+---
+
 ## ⚙️ Configuration
 
 Environment variables are managed in `web/.env.local`.
@@ -128,6 +166,10 @@ Environment variables are managed in `web/.env.local`.
 ### "PydanticImportError"
 - **Cause**: Version mismatch between ChromaDB and Pydantic.
 - **Fix**: Run `pip install "pydantic<2.0.0"` in your venv.
+
+### Autocomplete is blocking Chat/Summary
+- **Cause**: Ollama is running in single-threaded mode (default).
+- **Fix**: Restart Ollama with `OLLAMA_NUM_PARALLEL=4 ollama serve`.
 
 ---
 

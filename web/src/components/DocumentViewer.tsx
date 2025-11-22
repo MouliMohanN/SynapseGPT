@@ -1,12 +1,9 @@
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import rehypeRaw from 'rehype-raw';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import React, { useState } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DocumentViewerSkeleton } from '@/components/Skeleton';
 import type { DocumentContent } from '@/lib/types';
-import { EditDocumentModal } from './EditDocumentModal';
+import { DocumentEditor } from './Editor/DocumentEditor';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface DocumentViewerProps {
   docContent: DocumentContent | null;
@@ -16,6 +13,7 @@ interface DocumentViewerProps {
   documentContentRef: React.RefObject<HTMLDivElement | null>;
   setShowSections: (show: boolean) => void;
   onDocumentUpdate?: () => void;
+  settings: any;
 }
 
 export function DocumentViewer({
@@ -26,16 +24,42 @@ export function DocumentViewer({
   documentContentRef,
   setShowSections,
   onDocumentUpdate,
+  settings,
 }: DocumentViewerProps) {
-  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
-  const handleSaveEdit = () => {
-    onDocumentUpdate?.();
+  // Reset editing state when document changes
+  React.useEffect(() => {
+    setIsEditing(false);
+  }, [docContent?.id]);
+
+  const handleSaveEdit = async (newContent: string) => {
+    if (!docContent?.id) return;
+    
+    try {
+      const encodedId = encodeURIComponent(docContent.id);
+      const res = await fetch(`/api/docs/${encodedId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newContent }),
+      });
+      
+      if (!res.ok) {
+        throw new Error("Failed to save document");
+      }
+      
+      onDocumentUpdate?.();
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Failed to save:", err);
+      // TODO: Show error toast
+      alert("Failed to save document");
+    }
   };
 
   return (
-    <div className="flex-1 p-3 bg-white">
-      <div className="flex items-center justify-between mb-2">
+    <div className="flex-1 p-3 bg-white flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-slate-800">📄 Document Viewer</h2>
           {docContent && (
@@ -46,7 +70,7 @@ export function DocumentViewer({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {docContent && !showSections && (
+          {docContent && !showSections && !isEditing && (
             <button
               onClick={() => setShowSections(true)}
               className="text-xs px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors"
@@ -55,9 +79,9 @@ export function DocumentViewer({
               📑 Sections
             </button>
           )}
-          {docContent && (
+          {docContent && !isEditing && (
             <button
-              onClick={() => setIsEditModalOpen(true)}
+              onClick={() => setIsEditing(true)}
               className="text-xs px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors flex items-center gap-1"
               title="Edit document"
             >
@@ -69,85 +93,35 @@ export function DocumentViewer({
           )}
         </div>
       </div>
+      
       {isDocLoading && <DocumentViewerSkeleton />}
+      
       {docError && (
         <p className="text-xs text-red-600">Failed to load document: {docError}</p>
       )}
+      
       {!isDocLoading && !docError && !docContent && (
         <p className="text-xs text-slate-600">
           Select a document from the left to view its contents.
         </p>
       )}
-      {!isDocLoading && !docError && docContent && (
-        <ErrorBoundary>
-          <div ref={documentContentRef} className="prose prose-slate prose-sm max-w-none text-slate-900
-          prose-p:my-3 prose-p:leading-relaxed prose-p:text-slate-900
-          prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
-          prose-ol:my-3 prose-ol:pl-5 prose-ol:space-y-1
-          prose-li:my-1 prose-li:text-slate-900
-          prose-h1:text-lg prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-3 prose-h1:text-slate-900
-          prose-h2:text-base prose-h2:font-bold prose-h2:mt-5 prose-h2:mb-2 prose-h2:text-slate-900
-          prose-h3:text-sm prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2 prose-h3:text-slate-900
-          prose-code:text-xs prose-code:bg-purple-100 prose-code:text-purple-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:font-medium
-          prose-pre:my-4 prose-pre:bg-slate-50 prose-pre:p-4 prose-pre:rounded-lg prose-pre:border prose-pre:border-slate-300
-          prose-strong:font-semibold prose-strong:text-slate-900
-          prose-a:text-purple-600 prose-a:underline prose-a:hover:text-purple-700"
-        >
-          <ReactMarkdown 
-            rehypePlugins={[rehypeRaw]}
-            components={{
-              code({ className, children, ...props }: any) {
-                const match = /language-(\w+)/.exec(className || '');
-                const codeString = String(children).replace(/\n$/, '');
-                const isInline = !className;
-                
-                return !isInline && match ? (
-                  <div className="relative group">
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(codeString);
-                      }}
-                      className="absolute right-2 top-2 px-2 py-1 text-[10px] bg-purple-600 hover:bg-purple-700 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                    >
-                      Copy
-                    </button>
-                    <SyntaxHighlighter
-                      style={prism as any}
-                      language={match[1]}
-                      PreTag="div"
-                      customStyle={{
-                        margin: 0,
-                        borderRadius: '0.375rem',
-                        fontSize: '0.75rem',
-                        backgroundColor: '#f8f9fa',
-                        border: '1px solid #e2e8f0',
-                      }}
-                      {...props}
-                    >
-                      {codeString}
-                    </SyntaxHighlighter>
-                  </div>
-                ) : (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                );
-              },
-            }}
-          >
-            {docContent.rawText}
-          </ReactMarkdown>
-        </div>
-        </ErrorBoundary>
-      )}
       
-      {/* Edit Document Modal */}
-      <EditDocumentModal
-        isOpen={isEditModalOpen}
-        docId={docContent?.id ?? null}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={handleSaveEdit}
-      />
+      {!isDocLoading && !docError && docContent && (
+        isEditing ? (
+          <DocumentEditor
+            initialContent={docContent.rawText}
+            onSave={handleSaveEdit}
+            onCancel={() => setIsEditing(false)}
+            autocompleteSettings={settings.autocompleteSettings}
+          />
+        ) : (
+          <ErrorBoundary>
+            <div ref={documentContentRef} className="flex-1 overflow-y-auto">
+              <MarkdownRenderer content={docContent.rawText} />
+            </div>
+          </ErrorBoundary>
+        )
+      )}
     </div>
   );
 }

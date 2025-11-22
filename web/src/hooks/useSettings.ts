@@ -15,6 +15,16 @@ const defaultSettings = {
     tone: "professional" as "professional" | "casual" | "tutorial",
     generateQuestions: -1,
   },
+  autocompleteSettings: {
+    enabled: true,
+    debounceDelay: 800,
+    maxContextLines: 50,
+    model: "qwen2.5-coder:1.5b",
+    temperature: 0.1,
+    topP: 0.9,
+    maxTokens: 50,
+    repeatPenalty: 1.1,
+  },
 };
 
 export const useSettings = () => {
@@ -35,6 +45,10 @@ export const useSettings = () => {
             summaryBehavioralSettings: {
               ...defaultSettings.summaryBehavioralSettings,
               ...(parsed.summaryBehavioralSettings ?? {}),
+            },
+            autocompleteSettings: {
+              ...defaultSettings.autocompleteSettings,
+              ...(parsed.autocompleteSettings ?? {}),
             },
           };
         } catch {

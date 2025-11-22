@@ -123,7 +123,7 @@ export function CenterPane({
 
   return (
     <section
-        className="flex-1 flex border-r border-slate-300 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-100 hover:scrollbar-thumb-purple-500 min-w-0"
+        className="flex-1 flex border-r border-slate-300 overflow-hidden min-w-0"
         ref={documentViewerRef}
       >
         <SectionTOC
@@ -136,7 +136,7 @@ export function CenterPane({
           setSelectedSectionId={setSelectedSectionId}
         />
 
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-100 hover:scrollbar-thumb-purple-500">
           <SummaryPanel
             selectedDocId={selectedDocId}
             summaryContent={summaryContent}
@@ -154,6 +154,7 @@ export function CenterPane({
             documentContentRef={documentContentRef}
             setShowSections={setShowSections}
             onDocumentUpdate={loadDoc}
+            settings={settings}
           />
         </div>
       </section>
