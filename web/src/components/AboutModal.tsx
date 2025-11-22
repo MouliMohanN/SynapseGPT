@@ -28,7 +28,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
             <div className="h-8 w-px bg-slate-300" />
             <div>
               <h2 className="text-lg font-bold text-slate-900">About SynapseGPT</h2>
-              <p className="text-xs text-slate-600">AI-Powered Documentation Assistant</p>
+              <p className="text-xs text-slate-600">Local-First RAG Chat Assistant</p>
             </div>
           </div>
           <button
@@ -68,11 +68,12 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
           <div>
             <h3 className="text-base font-semibold text-slate-900 mt-4 mb-2">How to Use</h3>
             <ol className="text-sm text-slate-700 space-y-1">
-              <li>1. Browse and select a document from the left panel</li>
-              <li>2. View the AI-generated summary in the center panel</li>
-              <li>3. Read the full document content below the summary</li>
-              <li>4. Ask questions about the document in the chat panel</li>
-              <li>5. Use section navigation for focused discussions</li>
+              <li>1. Upload documents via drag-and-drop (supports PDF, Word, Excel, PowerPoint, HTML, images)</li>
+              <li>2. Or manually ingest using <code className="text-xs bg-slate-100 px-1 rounded">npx tsx scripts/ingest.ts</code></li>
+              <li>3. Browse and select documents from the left panel</li>
+              <li>4. Ask questions in the chat - AI retrieves relevant context with citations</li>
+              <li>5. Click "Edit" to modify documents with AI autocomplete (Tab to accept)</li>
+              <li>6. Use view modes (Edit/Preview/Split/Zen) for optimal writing</li>
             </ol>
           </div>
 
@@ -126,44 +127,8 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
 
 const capabilityCards = [
   {
-    title: "Smart Document Browser",
-    description: "Hierarchical file tree with search, filtering, and alphabetical sorting",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    ),
-  },
-  {
-    title: "AI-Generated Summaries",
-    description: "Automatic document summarization with streaming responses",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-      </svg>
-    ),
-  },
-  {
-    title: "Contextual Chat Assistant",
-    description: "Ask questions about specific documents or sections with persistent history",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-      </svg>
-    ),
-  },
-  {
-    title: "Section Navigation",
-    description: "Interactive table of contents with active section tracking and scroll sync",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-    ),
-  },
-  {
-    title: "Full-Text Search",
-    description: "Search across all documents with match counting and highlighting",
+    title: "Retrieval-Augmented Generation (RAG)",
+    description: "Ask questions about your documents using semantic search powered by ChromaDB vector database",
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -171,11 +136,47 @@ const capabilityCards = [
     ),
   },
   {
-    title: "Customizable Panels",
-    description: "Resizable panels, configurable AI settings, and persistent preferences",
+    title: "Multi-Format Document Support",
+    description: "Upload PDF, Word, PowerPoint, Excel, HTML, images, and more with automatic conversion to Markdown",
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Drag-and-Drop Upload",
+    description: "Easy file and folder uploads with automatic conversion and ingestion into the vector database",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+      </svg>
+    ),
+  },
+  {
+    title: "Smart Citations",
+    description: "Every AI answer includes precise citations pointing back to the source document",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Intelligent Document Editor",
+    description: "Inline editing with AI autocomplete, rich formatting toolbar, and multiple view modes",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
+  },
+  {
+    title: "100% Local & Private",
+    description: "All processing happens on your machine. Your data never leaves your device",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
       </svg>
     ),
   },
@@ -241,28 +242,29 @@ const techStackSections = [
       "React 19",
       "TypeScript",
       "Tailwind CSS 4",
+      "CodeMirror 6",
       "React Markdown",
-      "Syntax Highlighter",
-      "Lucide Icons",
     ],
   },
   {
     title: "Backend & AI",
     items: [
-      "Next.js API Routes",
-      "Ollama",
-      "Streaming Responses",
-      "File System API",
+      "Ollama (Local LLM)",
+      "ChromaDB (Vector DB)",
+      "LangChain.js",
+      "Nomic Embed Text",
+      "Qwen 2.5 Coder",
+      "Docling (Document Conversion)",
     ],
   },
   {
-    title: "Key Features & APIs",
+    title: "Key Features",
     items: [
-      "Intersection Observer",
+      "RAG Pipeline",
+      "Semantic Search",
+      "Streaming Responses",
       "Local Storage",
-      "Abort Controller",
       "Error Boundaries",
-      "Responsive Design",
     ],
   },
 ];
