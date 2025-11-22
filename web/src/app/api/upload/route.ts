@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { ingestFile } from "@/lib/rag/ingestor";
+import { convertDocumentToMarkdown, isSupportedByDocling } from "@/lib/pythonBridge";
 
 // Helper to get DOCS_ROOT
 const getDocsRoot = () => {
@@ -56,10 +57,45 @@ export async function POST(request: Request) {
         await fs.mkdir(fileDir, { recursive: true });
 
         const buffer = Buffer.from(await file.arrayBuffer());
+        
+        // Save the original file
         await fs.writeFile(filePath, buffer);
 
-        // Ingest the file
-        await ingestFile(filePath, docsRoot);
+        // Check if file needs conversion
+        const ext = path.extname(originalName).toLowerCase();
+        const isMarkdown = ext === ".md" || ext === ".txt";
+        
+        let fileToIngest = filePath;
+        
+        if (!isMarkdown && isSupportedByDocling(originalName)) {
+          // Convert to Markdown using Docling
+          console.log(`Converting ${originalName} to Markdown...`);
+          const conversionResult = await convertDocumentToMarkdown(filePath);
+          
+          if (conversionResult.success && conversionResult.markdown) {
+            // Save the converted Markdown
+            const mdFileName = originalName.replace(/\.[^.]+$/, ".md");
+            const mdRelativePath = cleanTargetPath 
+              ? path.join(cleanTargetPath, mdFileName)
+              : mdFileName;
+            const mdFilePath = path.join(docsRoot, mdRelativePath);
+            
+            await fs.writeFile(mdFilePath, conversionResult.markdown, "utf-8");
+            fileToIngest = mdFilePath;
+            console.log(`Successfully converted ${originalName} to ${mdFileName}`);
+            
+            // Delete the original file after successful conversion
+            await fs.unlink(filePath);
+            console.log(`Deleted original file: ${originalName}`);
+          } else {
+            console.error(`Failed to convert ${originalName}:`, conversionResult.error);
+            errors.push(`${file.name} (conversion failed)`);
+            continue;
+          }
+        }
+
+        // Ingest the file (either original .md/.txt or converted .md)
+        await ingestFile(fileToIngest, docsRoot);
         successCount++;
       } catch (err) {
         console.error(`Failed to process file ${file.name}:`, err);

@@ -86,11 +86,20 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
   };
 
   const handleFiles = async (files: File[]) => {
-    const validFiles = files.filter(file => file.name.endsWith(".md") || file.name.endsWith(".txt"));
+    // Supported extensions by Docling
+    const supportedExtensions = [
+      ".md", ".txt", ".pdf", ".docx", ".doc", ".pptx", ".xlsx",
+      ".html", ".htm", ".png", ".jpg", ".jpeg", ".asciidoc", ".adoc"
+    ];
+    
+    const validFiles = files.filter(file => {
+      const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+      return ext && supportedExtensions.includes(ext);
+    });
 
     if (validFiles.length === 0) {
       setStatus("error");
-      setMessage("No valid .md or .txt files found.");
+      setMessage("No supported files found. Supported: PDF, Word, PowerPoint, Excel, HTML, images, Markdown.");
       return;
     }
 
@@ -262,7 +271,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
                 </svg>
               </div>
               <p className="text-slate-700 font-medium mb-1">Drag & drop files or folders</p>
-              <p className="text-xs text-slate-500 mb-4">Markdown (.md) or Text (.txt)</p>
+              <p className="text-xs text-slate-500 mb-4">PDF, Word, PowerPoint, Excel, HTML, Images, Markdown</p>
               
               <div className="flex justify-center gap-2">
                 <button
@@ -283,7 +292,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
-                accept=".md,.txt"
+                accept=".md,.txt,.pdf,.docx,.doc,.pptx,.xlsx,.html,.htm,.png,.jpg,.jpeg,.asciidoc,.adoc"
                 multiple
                 onChange={(e) => e.target.files && handleFiles(Array.from(e.target.files))}
               />
