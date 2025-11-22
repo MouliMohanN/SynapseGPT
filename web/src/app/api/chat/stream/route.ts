@@ -38,7 +38,16 @@ export async function POST(request: Request) {
   const history = getConversationHistory(conversationId);
 
   const documentContext = await buildDocumentContext(docId ?? null, sectionId ?? null);
-  const retrievalContext = await buildRetrievalContext(message, docId ?? null);
+  
+  // Only scope retrieval to the current document if we are generating a summary.
+  // Otherwise (for chat), we want to search across all documents.
+  const isSummary = conversationId.startsWith("summary-");
+  
+  // If it is a summary, we do not need retrieval context at all (just the doc content).
+  // If it is chat, we want global retrieval (pass null as docId).
+  const retrievalContext = isSummary 
+    ? "" 
+    : await buildRetrievalContext(message, null);
 
   const systemPrompt = buildSystemPrompt({
     docId: docId ?? null,
@@ -136,8 +145,7 @@ async function buildRetrievalContext(message: string, docId: string | null) {
   return retrievedChunks
     .map(
       (chunk, index) =>
-        `[#${index + 1} | ${chunk.score.toFixed(3)} | ${chunk.docId}]
-${chunk.content}`,
+        `Source: ${chunk.docName}\nContent: ${chunk.content}`,
     )
     .join("\n\n---\n\n");
 }

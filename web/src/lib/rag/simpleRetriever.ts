@@ -33,6 +33,7 @@ export interface RetrieveOptions {
 
 export interface RetrievedChunk {
   docId: string;
+  docName: string;
   content: string;
   score: number;
   startOffset: number;
@@ -67,11 +68,15 @@ export async function retrieveRelevantChunks(
   const topK = options.topK ?? DEFAULT_TOP_K;
   const minScore = options.minScore ?? DEFAULT_MIN_SCORE;
 
+  // Create a map for quick lookup of doc names
+  const docNameMap = new Map(documents.map(d => [d.id, d.name]));
+
   return ranked
     .filter((entry) => entry.score >= minScore)
     .slice(0, topK)
     .map(({ chunk, score }) => ({
       docId: chunk.docId,
+      docName: docNameMap.get(chunk.docId) ?? "Unknown Document",
       content: chunk.content,
       score,
       startOffset: chunk.startOffset,

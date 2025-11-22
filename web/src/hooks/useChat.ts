@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '@/lib/types';
 
-const DEFAULT_CONVERSATION_ID = "demo-conversation";
+const DEFAULT_CONVERSATION_ID = "chat-";
 const CHAT_STORAGE_KEY = "synapsegpt-chat-history";
 
 export const useChat = (selectedDocId: string | null, selectedSectionId: string | null, settings: any) => {

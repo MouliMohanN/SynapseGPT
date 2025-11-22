@@ -28,7 +28,7 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
 
   if (input.retrievalContext) {
     parts.push(
-      `\n\nRETRIEVED EXCERPTS:\n${input.retrievalContext}\n\nIncorporate the above excerpts when forming your answer.`,
+      `\n\nRETRIEVED EXCERPTS:\n${input.retrievalContext}\n\nIncorporate the above excerpts when forming your answer.\n\nCRITICAL INSTRUCTION: You MUST cite the source document for every piece of information you use from the retrieved excerpts. Use the format [Source: Document Name] at the end of the relevant sentence. If you use information from multiple sources, cite them all.`,
     );
   }
 
