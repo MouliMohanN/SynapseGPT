@@ -145,12 +145,16 @@ interface DocumentTreeProps {
   selectedDocId: string | null;
   onSelectDoc: (id: string) => void;
   onSettingsClick: () => void;
+  onUploadClick: () => void;
+  refreshTrigger?: number;
 }
 
 export function DocumentTree({
   selectedDocId,
   onSelectDoc,
   onSettingsClick,
+  onUploadClick,
+  refreshTrigger = 0,
 }: DocumentTreeProps) {
   const [docs, setDocs] = useState<DocNode[]>([]);
   const [isDocsLoading, setIsDocsLoading] = useState(false);
@@ -162,7 +166,7 @@ export function DocumentTree({
   const [searchResults] = useState<{docId: string, matches: number}[]>([]);
   // const [isSearching, setIsSearching] = useState(false);
 
-  // Load documents on mount
+  // Load documents on mount or when refreshTrigger changes
   useEffect(() => {
     const loadDocs = async () => {
       try {
@@ -174,10 +178,12 @@ export function DocumentTree({
         }
         const data = (await res.json()) as { docs: DocNode[] };
         setDocs(data.docs);
-        // Auto-select the first file if available
-        const firstFile = findFirstFile(data.docs);
-        if (firstFile) {
-          onSelectDoc(firstFile.id);
+        // Auto-select the first file if available and nothing is selected
+        if (!selectedDocId) {
+          const firstFile = findFirstFile(data.docs);
+          if (firstFile) {
+            onSelectDoc(firstFile.id);
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
@@ -188,7 +194,7 @@ export function DocumentTree({
     };
 
     void loadDocs();
-  }, [onSelectDoc]);
+  }, [onSelectDoc, refreshTrigger, selectedDocId]);
 
   const sortDocs = (nodes: DocNode[]): DocNode[] => {
     return nodes
@@ -291,16 +297,27 @@ export function DocumentTree({
             </svg>
             <h2 className="text-sm font-semibold text-slate-900">Documentation</h2>
           </div>
-          <button
-            onClick={onSettingsClick}
-            className="p-1.5 bg-white hover:bg-purple-50 text-purple-600 rounded-md border border-purple-200 hover:border-purple-300 transition-all"
-            title="Settings"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onUploadClick}
+              className="p-1.5 bg-white hover:bg-purple-50 text-purple-600 rounded-md border border-purple-200 hover:border-purple-300 transition-all"
+              title="Upload Document"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </button>
+            <button
+              onClick={onSettingsClick}
+              className="p-1.5 bg-white hover:bg-purple-50 text-purple-600 rounded-md border border-purple-200 hover:border-purple-300 transition-all"
+              title="Settings"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
         </div>
         <input
           type="text"

@@ -9,6 +9,7 @@ import { CenterPane } from "@/components/CenterPane";
 import { AboutModal } from "@/components/AboutModal";
 import { useSettings } from "@/hooks/useSettings";
 import { HeaderBar } from "@/components/HeaderBar";
+import { UploadModal } from "@/components/UploadModal";
 
 export default function HomePage() {
   // Settings
@@ -16,10 +17,12 @@ export default function HomePage() {
   
   // Documents
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [docsRefreshTrigger, setDocsRefreshTrigger] = useState(0);
   
   // Layout state
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const [rightPanelWidth, setRightPanelWidth] = useState(25);
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
@@ -81,6 +84,8 @@ export default function HomePage() {
           selectedDocId={selectedDocId}
           onSelectDoc={setSelectedDocId}
           onSettingsClick={() => setShowSettings(true)}
+          onUploadClick={() => setShowUpload(true)}
+          refreshTrigger={docsRefreshTrigger}
         />
 
         {/* Resize handle for left panel */}
@@ -123,6 +128,13 @@ export default function HomePage() {
 
       {/* About Modal */}
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
+      
+      {/* Upload Modal */}
+      <UploadModal 
+        isOpen={showUpload} 
+        onClose={() => setShowUpload(false)} 
+        onUploadComplete={() => setDocsRefreshTrigger(v => v + 1)}
+      />
     </div>
   );
 }
