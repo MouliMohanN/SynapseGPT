@@ -6,6 +6,7 @@ import { prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DocumentViewerSkeleton } from '@/components/Skeleton';
 import type { DocumentContent } from '@/lib/types';
+import { EditDocumentModal } from './EditDocumentModal';
 
 interface DocumentViewerProps {
   docContent: DocumentContent | null;
@@ -14,6 +15,7 @@ interface DocumentViewerProps {
   showSections: boolean;
   documentContentRef: React.RefObject<HTMLDivElement | null>;
   setShowSections: (show: boolean) => void;
+  onDocumentUpdate?: () => void;
 }
 
 export function DocumentViewer({
@@ -23,12 +25,27 @@ export function DocumentViewer({
   showSections,
   documentContentRef,
   setShowSections,
+  onDocumentUpdate,
 }: DocumentViewerProps) {
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+
+  const handleSaveEdit = () => {
+    onDocumentUpdate?.();
+  };
+
   return (
     <div className="flex-1 p-3 bg-white">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-slate-800">📄 Document Viewer</h2>
+          {docContent && (
+            <span className="text-[10px] text-slate-600">
+              {docContent.path} · {(docContent.meta?.fileType ?? '').toUpperCase()} ·{" "}
+              {docContent.meta?.size ?? 0} chars
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
           {docContent && !showSections && (
             <button
               onClick={() => setShowSections(true)}
@@ -38,13 +55,19 @@ export function DocumentViewer({
               📑 Sections
             </button>
           )}
+          {docContent && (
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="text-xs px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors flex items-center gap-1"
+              title="Edit document"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit
+            </button>
+          )}
         </div>
-        {docContent && (
-          <span className="text-[10px] text-slate-600">
-            {docContent.path} · {docContent.meta.fileType?.toUpperCase()} ·{" "}
-            {docContent.meta.size} chars
-          </span>
-        )}
       </div>
       {isDocLoading && <DocumentViewerSkeleton />}
       {docError && (
@@ -117,6 +140,14 @@ export function DocumentViewer({
         </div>
         </ErrorBoundary>
       )}
+      
+      {/* Edit Document Modal */}
+      <EditDocumentModal
+        isOpen={isEditModalOpen}
+        docId={docContent?.id ?? null}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 }

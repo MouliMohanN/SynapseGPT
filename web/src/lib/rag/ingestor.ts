@@ -24,6 +24,18 @@ const splitter = new RecursiveCharacterTextSplitter({
   chunkOverlap: 200,
 });
 
+let vectorStorePromise: Promise<Chroma> | null = null;
+
+async function getVectorStoreInstance() {
+  if (!vectorStorePromise) {
+    vectorStorePromise = Chroma.fromExistingCollection(embeddings, {
+      collectionName: COLLECTION_NAME,
+      url: CHROMA_URL,
+    });
+  }
+  return vectorStorePromise;
+}
+
 interface IngestionResult {
   success: boolean;
   chunksIndexed: number;
@@ -122,4 +134,17 @@ async function loadDocuments(dir: string, rootDir: string) {
     }
   }
   return docs;
+}
+
+export async function removeDocumentFromVectorStore(docId: string) {
+  if (!docId) return;
+  try {
+    const vectorStore = await getVectorStoreInstance();
+    await vectorStore.delete({
+      filter: { docId },
+    });
+  } catch (error) {
+    console.error(`Error removing document ${docId} from vector store:`, error);
+    throw error;
+  }
 }

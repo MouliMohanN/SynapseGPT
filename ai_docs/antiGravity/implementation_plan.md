@@ -56,28 +56,39 @@ This document outlines the comprehensive plan for migrating SynapseGPT from an i
         - Replaced native dropdown with a custom styled component to match the app theme.
         - Integrated the modal into `DocumentTree.tsx` and ensured the file list auto-refreshes after upload.
 
-## Phase 6: Robust Document Support with Docling (Upcoming)
-- **Goal**: Implement a production-grade document conversion pipeline using **Docling** to handle PDF and Word documents with high fidelity (tables, layouts, equations).
-- **Architecture**: Hybrid Node.js + Python. The Node.js backend will delegate complex file conversion to a specialized Python script using the `docling` library.
+## Phase 6: Robust Document Support with Docling (Completed)
+- **Goal**: Implement a production-grade document conversion pipeline using **Docling** to handle PDF, Word, PowerPoint, Excel, HTML, and image files with high fidelity (tables, layouts, equations).
+- **Architecture**: Hybrid Node.js + Python. The Node.js backend delegates complex file conversion to a specialized Python script using the `docling` library.
 
-- **Proposed Changes**:
+- **Implementation**:
     1.  **Python Environment Setup**:
-        - Install `docling` in the existing Python environment.
-        - Ensure `torch` and other dependencies are compatible.
+        - Installed `docling` in the existing Python 3.11 virtual environment.
+        - All dependencies (PyTorch, transformers, etc.) are managed automatically.
     2.  **Conversion Script**:
-        - Create `scripts/convert_doc.py`.
-        - Input: Path to source file (PDF/DOCX).
-        - Output: Converted Markdown content (stdout or file).
-        - Logic: Use `DocumentConverter` to process the file and export to Markdown.
+        - Created `scripts/convert_doc.py`.
+        - Accepts file path as input, outputs Markdown to stdout.
+        - Uses Docling's `DocumentConverter` to process files and export to Markdown.
     3.  **Node.js Integration**:
-        - Create `src/lib/pythonBridge.ts` to spawn the Python process.
-        - Handle stdout/stderr and error codes.
+        - Created `src/lib/pythonBridge.ts` to spawn the Python process from the venv.
+        - Handles stdout/stderr and error codes for robust error handling.
     4.  **API Update**:
-        - Modify `/api/upload/route.ts`:
-            - Detect `.pdf`, `.doc`, `.docx`.
-            - Call `pythonBridge` to convert the file.
-            - Save the generated Markdown to `docs/`.
-            - Trigger ingestion on the *converted* Markdown file.
+        - Modified `/api/upload/route.ts`:
+            - Detects file types using `isSupportedByDocling()`.
+            - Calls `pythonBridge` to convert non-Markdown files.
+            - Saves converted Markdown to `docs/`.
+            - Deletes original file after successful conversion to avoid duplicates.
+            - Triggers ingestion on the converted Markdown file.
     5.  **UI Update**:
-        - Update `UploadModal.tsx` to accept `.pdf`, `.doc`, `.docx`.
-        - Add loading state feedback (conversion might take a few seconds).
+        - Updated `UploadModal.tsx` to accept all Docling-supported formats:
+            - PDF (`.pdf`)
+            - Word (`.docx`, `.doc`)
+            - PowerPoint (`.pptx`)
+            - Excel (`.xlsx`)
+            - HTML (`.html`, `.htm`)
+            - Images (`.png`, `.jpg`, `.jpeg`)
+            - AsciiDoc (`.asciidoc`, `.adoc`)
+            - Markdown (`.md`, `.txt`)
+        - Updated validation logic and UI text to reflect expanded format support.
+
+**Supported Formats**: PDF, DOCX, PPTX, XLSX, HTML, PNG, JPG, JPEG, AsciiDoc, Markdown, TXT
+

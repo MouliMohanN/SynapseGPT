@@ -32,6 +32,31 @@ export function CenterPane({
     handleGenerateSummary,
   } = useSummary(selectedDocId, settings);
 
+  // Load document function (extracted for reuse)
+  const loadDoc = async () => {
+    if (!selectedDocId) {
+      setDocContent(null);
+      return;
+    }
+
+    try {
+      setIsDocLoading(true);
+      setDocError(null);
+      const encodedId = encodeURIComponent(selectedDocId);
+      const res = await fetch(`/api/docs/${encodedId}`);
+      if (!res.ok) {
+        throw new Error(`Failed to load document: ${res.status}`);
+      }
+      const data = (await res.json()) as DocumentContent;
+      setDocContent(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setDocError(message);
+    } finally {
+      setIsDocLoading(false);
+    }
+  };
+
   // Load document content when selection changes
   useEffect(() => {
     if (!selectedDocId) {
@@ -40,25 +65,6 @@ export function CenterPane({
       setActiveSectionId(null);
       return;
     }
-
-    const loadDoc = async () => {
-      try {
-        setIsDocLoading(true);
-        setDocError(null);
-        const encodedId = encodeURIComponent(selectedDocId);
-        const res = await fetch(`/api/docs/${encodedId}`);
-        if (!res.ok) {
-          throw new Error(`Failed to load document: ${res.status}`);
-        }
-        const data = (await res.json()) as DocumentContent;
-        setDocContent(data);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        setDocError(message);
-      } finally {
-        setIsDocLoading(false);
-      }
-    };
 
     setSelectedSectionId(null);
     setActiveSectionId(null);
@@ -147,6 +153,7 @@ export function CenterPane({
             showSections={showSections}
             documentContentRef={documentContentRef}
             setShowSections={setShowSections}
+            onDocumentUpdate={loadDoc}
           />
         </div>
       </section>

@@ -10,7 +10,9 @@ SynapseGPT is a **local-first**, privacy-focused AI chat application designed to
 - **🔎 Semantic Search**: Uses **ChromaDB** (Vector Database) to understand the *meaning* of your queries, not just keyword matching.
 - **📚 Smart Citations**: Every answer includes precise citations pointing back to the source document.
 - **⚡ Real-time Streaming**: Fast, streaming responses for a fluid chat experience.
-- **📂 Markdown Support**: Ingests and processes your local Markdown documentation automatically.
+- **📄 Multi-Format Support**: Upload and process PDF, Word, PowerPoint, Excel, HTML, images, and Markdown files.
+- **🤖 AI-Powered Conversion**: Uses [Docling](https://github.com/docling-project/docling) to convert documents to high-quality Markdown with preserved structure.
+- **📤 Drag-and-Drop Upload**: Easy file and folder uploads with automatic conversion and ingestion.
 
 ---
 
@@ -73,13 +75,14 @@ ChromaDB runs as a separate local server.
 python3.11 -m venv venv
 source venv/bin/activate
 
-# 2. Install ChromaDB
-pip install chromadb
+# 2. Install dependencies
+pip install chromadb docling
 
 # 3. Start the Server
 chroma run --path ./chroma_db
 ```
 *⚠️ Keep this terminal open! The server runs on `localhost:8000`.*
+*Note: Docling is required for PDF/Word conversion. First-time installation may take a few minutes.*
 
 ### 3. Ingest Documents
 Process your files from the `docs/` folder into the vector database:
