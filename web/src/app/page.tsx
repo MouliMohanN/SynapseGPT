@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Logo } from "@/components/Logo";
 import { DocumentTree } from "@/components/DocumentTree";
 import { ChatPanel } from "@/components/ChatPanel";
 import { SettingsModal } from "@/components/SettingsModal";

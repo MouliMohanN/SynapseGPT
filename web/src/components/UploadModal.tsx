@@ -67,8 +67,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
       return new Promise((resolve) => {
         item.file((file: File) => {
           // Manually add the relative path to the file object so we can read it later
-          // @ts-ignore
-          file.webkitRelativePath = path + file.name;
+          // webkitRelativePath is non-standard but supported in browsers
+          (file as any).webkitRelativePath = path + file.name;
           resolve([file]);
         });
       });
@@ -149,6 +149,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
         setMessage(data.error || "Upload failed.");
       }
     } catch (err) {
+      console.error("Network error during upload:", err);
       setStatus("error");
       setMessage("Network error occurred.");
     }
@@ -300,11 +301,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
                 type="file"
                 ref={folderInputRef}
                 className="hidden"
-                // @ts-ignore - webkitdirectory is non-standard but supported
-                webkitdirectory="" 
-                directory=""
                 multiple
                 onChange={(e) => e.target.files && handleFiles(Array.from(e.target.files))}
+                // webkitdirectory is non-standard but supported in modern browsers
+                {...({ webkitdirectory: "", directory: "" } as any)}
               />
             </>
           )}

@@ -10,9 +10,7 @@ import {
 import {
   StateField,
   StateEffect,
-  Transaction,
   Extension,
-  EditorState,
 } from "@codemirror/state";
 
 // Effect to update the ghost text
@@ -99,8 +97,11 @@ class GhostTextWidget extends WidgetType {
   toDOM() {
     const span = document.createElement("span");
     span.textContent = this.text;
-    span.style.opacity = "0.5";
+    span.className = "cm-ghost-text";
+    span.style.color = "rgba(148, 163, 184, 0.75)"; // neutral slate-like grey
+    span.style.backgroundColor = "transparent";
     span.style.pointerEvents = "none";
+    span.style.userSelect = "none";
     return span;
   }
   

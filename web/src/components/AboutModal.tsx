@@ -72,7 +72,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
               <li>2. Or manually ingest using <code className="text-xs bg-slate-100 px-1 rounded">npx tsx scripts/ingest.ts</code></li>
               <li>3. Browse and select documents from the left panel</li>
               <li>4. Ask questions in the chat - AI retrieves relevant context with citations</li>
-              <li>5. Click "Edit" to modify documents with AI autocomplete (Tab to accept)</li>
+              <li>5. Click &quot;Edit&quot; to modify documents with AI autocomplete (Tab to accept)</li>
               <li>6. Use view modes (Edit/Preview/Split/Zen) for optimal writing</li>
             </ol>
           </div>

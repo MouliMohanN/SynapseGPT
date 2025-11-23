@@ -1,10 +1,22 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { EditorView } from "@codemirror/view";
 import { ghostTextExtension } from "./GhostTextExtension";
 import { MarkdownRenderer } from "../MarkdownRenderer";
+
+const editorTheme = EditorView.theme({
+  ".cm-selectionBackground, .cm-content ::selection": {
+    backgroundColor: "rgba(148, 163, 184, 0.20)", // neutral slate-like selection
+  },
+  ".cm-activeLine": {
+    backgroundColor: "transparent", // no block behind the caret line
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: "transparent",
+  },
+});
 
 interface DocumentEditorProps {
   initialContent: string;
@@ -36,6 +48,15 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(autocompleteSettings.enabled);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
+  const handleSave = useCallback(async () => {
+    setIsSaving(true);
+    try {
+      await onSave(content);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [content, onSave]);
+
   // Handle Cmd+S / Ctrl+S to save
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -49,16 +70,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [content, isFullScreen]);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await onSave(content);
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  }, [handleSave, isFullScreen]);
 
   const insertText = (before: string, after: string = "") => {
     const view = editorRef.current?.view;
@@ -201,6 +213,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 extensions={[
                   markdown({ base: markdownLanguage, codeLanguages: languages }),
                   EditorView.lineWrapping,
+                  editorTheme,
                   ghostTextExtension({
                     ...autocompleteSettings,
                     enabled: autocompleteEnabled,

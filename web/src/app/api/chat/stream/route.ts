@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   // If it is chat, we want global retrieval (pass null as docId).
   const retrievalContext = isSummary 
     ? "" 
-    : await buildRetrievalContext(message, null);
+    : await buildRetrievalContext(message);
 
   const systemPrompt = buildSystemPrompt({
     docId: docId ?? null,
@@ -128,7 +128,7 @@ async function buildDocumentContext(docId: string | null, sectionId: string | nu
   return docContent.rawText;
 }
 
-async function buildRetrievalContext(message: string, docId: string | null) {
+async function buildRetrievalContext(message: string) {
   if (!isRetrievalContextEnabled()) {
     return "";
   }
@@ -141,7 +141,7 @@ async function buildRetrievalContext(message: string, docId: string | null) {
 
   return retrievedChunks
     .map(
-      (chunk, index) =>
+      (chunk) =>
         `Source: ${chunk.metadata.docName || chunk.metadata.source}\nContent: ${chunk.content}`,
     )
     .join("\n\n---\n\n");

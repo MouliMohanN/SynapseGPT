@@ -34,7 +34,7 @@ export function CenterPane({
   } = useSummary(selectedDocId, settings);
 
   // Load document function (extracted for reuse)
-  const loadDoc = async () => {
+  const loadDoc = useCallback(async () => {
     if (!selectedDocId) {
       setDocContent(null);
       return;
@@ -56,7 +56,7 @@ export function CenterPane({
     } finally {
       setIsDocLoading(false);
     }
-  };
+  }, [selectedDocId]);
 
   // Load document content when selection changes
   useEffect(() => {
@@ -70,7 +70,7 @@ export function CenterPane({
     setSelectedSectionId(null);
     setActiveSectionId(null);
     void loadDoc();
-  }, [selectedDocId]);
+  }, [selectedDocId, loadDoc]);
 
   const handleSectionClick = useCallback(
     (sectionId: string) => {

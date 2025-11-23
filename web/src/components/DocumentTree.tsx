@@ -1,5 +1,4 @@
 import React from 'react';
-import type { DocNode } from '@/lib/types';
 import { DocTreeNode } from './DocumentTree/DocTreeNode';
 import { DeleteConfirmDialog } from './DocumentTree/DeleteConfirmDialog';
 import { RenameDialog } from './DocumentTree/RenameDialog';
