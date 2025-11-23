@@ -114,6 +114,7 @@ class GhostTextWidget extends WidgetType {
 export class GhostTextFetcher {
   private timeout: NodeJS.Timeout | null = null;
   private abortController: AbortController | null = null;
+  private currentRequestId = 0;
 
   constructor(private view: EditorView, private options: {
     enabled: boolean;
@@ -132,13 +133,16 @@ export class GhostTextFetcher {
   }
 
   scheduleFetch() {
+    if (!this.options.enabled) {
+      return;
+    }
     if (this.timeout) clearTimeout(this.timeout);
     if (this.abortController) this.abortController.abort();
-    
-    this.timeout = setTimeout(() => this.fetchSuggestion(), this.options.debounceDelay);
+    const requestId = ++this.currentRequestId;
+    this.timeout = setTimeout(() => this.fetchSuggestion(requestId), this.options.debounceDelay);
   }
 
-  async fetchSuggestion() {
+  async fetchSuggestion(requestId: number) {
     const state = this.view.state;
     const head = state.selection.main.head;
     
@@ -164,13 +168,16 @@ export class GhostTextFetcher {
         signal: this.abortController.signal,
       });
 
-      if (!res.ok || !res.body) return;
+      if (!res.ok || !res.body || requestId !== this.currentRequestId) return;
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let suggestion = "";
 
       while (true) {
+        if (requestId !== this.currentRequestId) {
+          return;
+        }
         const { value, done } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
