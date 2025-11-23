@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { ingestFile, removeDocumentFromVectorStore } from "@/lib/rag/ingestor";
+import { saveHistory } from "@/lib/history";
 
 // Helper to get DOCS_ROOT
 const getDocsRoot = () => {
@@ -349,6 +350,20 @@ export async function PUT(
       );
     }
 
+    // Read old content for history
+    let oldContent = "";
+    try {
+      oldContent = await fs.readFile(filePath, "utf-8");
+    } catch (e) {
+      // File might not exist or be readable, just ignore history for this first save
+      console.log("No previous content found for history.");
+    }
+
+    // Save history (Reverse Delta)
+    if (oldContent) {
+       await saveHistory(sanitizedDocId, oldContent, content);
+    }
+    
     // Save updated content
     await fs.writeFile(filePath, content, "utf-8");
 

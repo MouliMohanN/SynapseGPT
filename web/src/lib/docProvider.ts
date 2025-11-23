@@ -48,6 +48,12 @@ async function buildNode(
   absoluteParent: string,
   relativeParent: string,
 ): Promise<DocNode | null> {
+  // Hide internal or tooling-related folders like .history (and any
+  // other dot-prefixed entries) from the public docs tree.
+  if (name.startsWith(".")) {
+    return null;
+  }
+
   const absolutePath = path.join(absoluteParent, name);
   const relativePath = relativeParent ? path.join(relativeParent, name) : name;
 

@@ -4,6 +4,8 @@ import { DocumentViewerSkeleton } from '@/components/Skeleton';
 import type { DocumentContent } from '@/lib/types';
 import { DocumentEditor } from './Editor/DocumentEditor';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { HistorySidebar } from './History/HistorySidebar';
+import { DiffViewer } from './History/DiffViewer';
 
 interface DocumentViewerProps {
   docContent: DocumentContent | null;
@@ -27,10 +29,62 @@ export function DocumentViewer({
   settings,
 }: DocumentViewerProps) {
   const [isEditing, setIsEditing] = useState(false);
+  
+  // History State
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyVersions, setHistoryVersions] = useState<any[]>([]);
+  const [selectedVersionTimestamp, setSelectedVersionTimestamp] = useState<string | null>(null);
+  const [historicalContent, setHistoricalContent] = useState<string | null>(null);
 
-  // Reset editing state when document changes
+  const fetchHistory = async () => {
+    if (!docContent?.id) return;
+    try {
+      const res = await fetch(`/api/docs/${encodeURIComponent(docContent.id)}/history`);
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryVersions(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch history:", error);
+    }
+  };
+
+  const handleToggleHistory = () => {
+    if (!showHistory) {
+      fetchHistory();
+    } else {
+      setSelectedVersionTimestamp(null);
+      setHistoricalContent(null);
+    }
+    setShowHistory(!showHistory);
+  };
+
+  const handleSelectVersion = async (timestamp: string) => {
+    if (!docContent?.id) return;
+    if (timestamp === 'current') {
+      setSelectedVersionTimestamp(null);
+      setHistoricalContent(null);
+      return;
+    }
+
+    setSelectedVersionTimestamp(timestamp);
+    try {
+      const res = await fetch(`/api/docs/${encodeURIComponent(docContent.id)}/history/${timestamp}`);
+      if (res.ok) {
+        const data = await res.json();
+        setHistoricalContent(data.content);
+      }
+    } catch (error) {
+      console.error("Failed to fetch version:", error);
+    }
+  };
+
+  // Reset editing and history state when document changes
   React.useEffect(() => {
     setIsEditing(false);
+    setShowHistory(false);
+    setSelectedVersionTimestamp(null);
+    setHistoricalContent(null);
   }, [docContent?.id]);
 
   const handleSaveEdit = async (newContent: string) => {
@@ -80,6 +134,22 @@ export function DocumentViewer({
             </button>
           )}
           {docContent && !isEditing && (
+             <button
+               onClick={handleToggleHistory}
+               className={`text-xs px-2 py-0.5 rounded-md shadow-sm transition-colors flex items-center gap-1 ${
+                 showHistory 
+                   ? 'bg-purple-100 text-purple-700 border border-purple-200' 
+                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+               }`}
+               title="View History"
+             >
+               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+               </svg>
+               History
+             </button>
+          )}
+          {docContent && !isEditing && (
             <button
               onClick={() => setIsEditing(true)}
               className="text-xs px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors flex items-center gap-1"
@@ -107,12 +177,31 @@ export function DocumentViewer({
       )}
       
       {!isDocLoading && !docError && docContent && (
-        isEditing ? (
+        showHistory ? (
+          <div className="flex-1 flex overflow-hidden border border-slate-200 rounded-lg">
+             <div className="flex-1 flex flex-col overflow-hidden">
+                {selectedVersionTimestamp && historicalContent ? (
+                  <DiffViewer oldContent={historicalContent} newContent={docContent.rawText} />
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-slate-400 bg-slate-50">
+                    Select a version to view changes
+                  </div>
+                )}
+             </div>
+             <HistorySidebar 
+                versions={historyVersions}
+                selectedVersion={selectedVersionTimestamp}
+                onSelectVersion={handleSelectVersion}
+                onClose={() => setShowHistory(false)}
+             />
+          </div>
+        ) : isEditing ? (
           <DocumentEditor
             initialContent={docContent.rawText}
             onSave={handleSaveEdit}
             onCancel={() => setIsEditing(false)}
             autocompleteSettings={settings.autocompleteSettings}
+            docId={docContent.id}
           />
         ) : (
           <ErrorBoundary>

@@ -5,6 +5,8 @@ import { languages } from "@codemirror/language-data";
 import { EditorView } from "@codemirror/view";
 import { ghostTextExtension } from "./GhostTextExtension";
 import { MarkdownRenderer } from "../MarkdownRenderer";
+import { HistorySidebar } from "../History/HistorySidebar";
+import { DiffViewer } from "../History/DiffViewer";
 
 const editorTheme = EditorView.theme({
   ".cm-selectionBackground, .cm-content ::selection": {
@@ -31,6 +33,7 @@ interface DocumentEditorProps {
     maxTokens: number;
     repeatPenalty: number;
   };
+  docId: string; // Added docId prop
 }
 
 type ViewMode = 'edit' | 'preview' | 'split';
@@ -40,6 +43,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   onSave,
   onCancel,
   autocompleteSettings,
+  docId,
 }) => {
   const [content, setContent] = useState(initialContent);
   const [isSaving, setIsSaving] = useState(false);
@@ -47,6 +51,54 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(autocompleteSettings.enabled);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+
+  // History State
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyVersions, setHistoryVersions] = useState<any[]>([]);
+  const [selectedVersionTimestamp, setSelectedVersionTimestamp] = useState<string | null>(null);
+  const [historicalContent, setHistoricalContent] = useState<string | null>(null);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch(`/api/docs/${encodeURIComponent(docId)}/history`);
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryVersions(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch history:", error);
+    }
+  };
+
+  const handleToggleHistory = () => {
+    if (!showHistory) {
+      fetchHistory();
+    } else {
+      // Reset history state when closing
+      setSelectedVersionTimestamp(null);
+      setHistoricalContent(null);
+    }
+    setShowHistory(!showHistory);
+  };
+
+  const handleSelectVersion = async (timestamp: string) => {
+    if (timestamp === 'current') {
+      setSelectedVersionTimestamp(null);
+      setHistoricalContent(null);
+      return;
+    }
+
+    setSelectedVersionTimestamp(timestamp);
+    try {
+      const res = await fetch(`/api/docs/${encodeURIComponent(docId)}/history/${timestamp}`);
+      if (res.ok) {
+        const data = await res.json();
+        setHistoricalContent(data.content);
+      }
+    } catch (error) {
+      console.error("Failed to fetch version:", error);
+    }
+  };
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
@@ -199,11 +251,23 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
              )}
            </ToolbarButton>
         </div>
+        
+        <div className="flex items-center gap-1 border-l border-slate-300 pl-2 ml-2">
+            <ToolbarButton 
+              onClick={handleToggleHistory} 
+              title="History"
+              active={showHistory}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </ToolbarButton>
+        </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Editor Pane */}
-        {(viewMode === 'edit' || viewMode === 'split') && (
+        {!showHistory && (viewMode === 'edit' || viewMode === 'split') && (
           <div className={`flex-1 flex flex-col min-w-0 border-r border-slate-200 ${viewMode === 'split' ? 'w-1/2' : 'w-full'}`}>
             <div className="flex-1 overflow-hidden bg-white relative">
               <CodeMirror
@@ -254,12 +318,33 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         )}
 
         {/* Preview Pane */}
-        {(viewMode === 'preview' || viewMode === 'split') && (
+        {!showHistory && (viewMode === 'preview' || viewMode === 'split') && (
            <div className={`flex-1 flex flex-col min-w-0 bg-white overflow-hidden ${viewMode === 'split' ? 'w-1/2' : 'w-full'}`}>
              <div className="flex-1 overflow-y-auto p-4">
                 <MarkdownRenderer content={content} />
              </div>
            </div>
+        )}
+
+        {/* History View */}
+        {showHistory && (
+          <div className="flex-1 flex overflow-hidden">
+             <div className="flex-1 flex flex-col overflow-hidden">
+                {selectedVersionTimestamp && historicalContent ? (
+                  <DiffViewer oldContent={historicalContent} newContent={content} />
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-slate-400">
+                    Select a version to view changes
+                  </div>
+                )}
+             </div>
+             <HistorySidebar 
+                versions={historyVersions}
+                selectedVersion={selectedVersionTimestamp}
+                onSelectVersion={handleSelectVersion}
+                onClose={() => setShowHistory(false)}
+             />
+          </div>
         )}
       </div>
 
