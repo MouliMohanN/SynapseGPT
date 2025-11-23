@@ -96,8 +96,19 @@ export function useDocumentTree({
       }
       const data = (await res.json()) as { docs: DocNode[] };
       setDocs(data.docs);
-      // Auto-select the first file if available and nothing is selected
-      if (!selectedDocId) {
+
+      const hasSelectedDoc = !!selectedDocId;
+      let hasDocInUrl = false;
+      if (typeof window !== "undefined") {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          hasDocInUrl = !!params.get("doc");
+        } catch {
+          hasDocInUrl = false;
+        }
+      }
+
+      if (!hasSelectedDoc && !hasDocInUrl) {
         const firstFile = findFirstFile(data.docs);
         if (firstFile) {
           onSelectDoc(firstFile.id);

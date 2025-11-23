@@ -1,9 +1,12 @@
+"use client";
+
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useRouter } from 'next/navigation';
 
 interface MarkdownRendererProps {
   content: string;
@@ -11,6 +14,36 @@ interface MarkdownRendererProps {
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className }) => {
+  const router = useRouter();
+
+  const LinkRenderer: React.FC<React.AnchorHTMLAttributes<HTMLAnchorElement>> = ({ href, children, ...props }) => {
+    const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (!href || typeof href !== 'string') return;
+      if (typeof window === 'undefined') return;
+
+      try {
+        const url = new URL(href, window.location.href);
+        const docId = url.searchParams.get('doc');
+
+        // Treat links that only change the ?doc= param on the same origin as
+        // internal navigation instead of full page loads.
+        if (url.origin === window.location.origin && docId) {
+          event.preventDefault();
+          router.replace(`${url.pathname}${url.search}`, { scroll: false });
+          return;
+        }
+      } catch {
+        // Fall back to default behavior on parse errors
+      }
+    };
+
+    return (
+      <a href={href} onClick={handleClick} {...props}>
+        {children}
+      </a>
+    );
+  };
+
   return (
     <div className={`prose prose-slate prose-sm max-w-none text-slate-900
       prose-p:my-3 prose-p:leading-relaxed prose-p:text-slate-900
@@ -30,6 +63,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}
         components={{
+          a: LinkRenderer,
           code({ className, children, ...props }: any) {
             const match = /language-(\w+)/.exec(className || '');
             const codeString = String(children).replace(/\n$/, '');

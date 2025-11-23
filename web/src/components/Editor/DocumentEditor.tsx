@@ -115,7 +115,6 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         setHistoricalContent(data.content ?? null);
         setHistoricalPatch(data.patch ?? null);
         setHistoricalMetadata(data.metadata ?? null);
-        setPatchFilter('all');
       }
     } catch (error) {
       console.error("Failed to fetch version:", error);

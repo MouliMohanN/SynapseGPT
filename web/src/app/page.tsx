@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DocumentTree } from "@/components/DocumentTree";
 import { ChatPanel } from "@/components/ChatPanel";
 import { SettingsModal } from "@/components/SettingsModal";
@@ -25,13 +26,36 @@ export default function HomePage() {
   const [rightPanelWidth, setRightPanelWidth] = useState(25);
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
-  
+  const router = useRouter();
+  const searchParams = useSearchParams();
   
   // Initialize panel widths from settings
   useEffect(() => {
     setRightPanelWidth(settings.defaultRightWidth);
   }, [settings]);
 
+  // Initialize selected document from URL (?doc=...) if present
+  useEffect(() => {
+    const docFromUrl = searchParams.get("doc");
+    if (docFromUrl && docFromUrl !== selectedDocId) {
+      setSelectedDocId(docFromUrl);
+    }
+  }, [searchParams, selectedDocId]);
+
+  const handleSelectDoc = useCallback(
+    (id: string) => {
+      setSelectedDocId(id);
+      if (typeof window === "undefined") return;
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("doc", id);
+        router.replace(url.toString(), { scroll: false });
+      } catch (error) {
+        console.error("Failed to update URL with doc id:", error);
+      }
+    },
+    [router],
+  );
 
   // Layout drag handlers
   const handleMouseMoveLeft = React.useCallback(() => {
@@ -81,7 +105,7 @@ export default function HomePage() {
         {/* Left: document browser */}
         <DocumentTree
           selectedDocId={selectedDocId}
-          onSelectDoc={setSelectedDocId}
+          onSelectDoc={handleSelectDoc}
           onSettingsClick={() => setShowSettings(true)}
           onUploadClick={() => setShowUpload(true)}
           refreshTrigger={docsRefreshTrigger}

@@ -249,3 +249,4 @@ Done
 		1. Using compound design pattern
 		2. Animated InputText - update the value via ref
 		3. How to handle view background and text colour ?
+20. Reference to a [FastDevBuild](/?doc=frontEnd%2FFastDevBuild.md) 

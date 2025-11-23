@@ -8,6 +8,7 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 import { HistorySidebar } from './History/HistorySidebar';
 import { DiffViewer } from './History/DiffViewer';
 import { PatchViewer } from './History/PatchViewer';
+import { Toast } from './Toast';
 
 interface DocumentViewerProps {
   docContent: DocumentContent | null;
@@ -31,6 +32,9 @@ export function DocumentViewer({
   settings,
 }: DocumentViewerProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const toastTimeoutRef = React.useRef<number | null>(null);
   
   // History State
   const [showHistory, setShowHistory] = useState(false);
@@ -42,6 +46,17 @@ export function DocumentViewer({
   const [patchFilter, setPatchFilter] = useState<'all' | 'high' | 'low'>('all');
   const [historyViewMode, setHistoryViewMode] = useState<'diff' | 'patch'>('diff');
   const [isHistoryFullScreen, setIsHistoryFullScreen] = useState(false);
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    if (toastTimeoutRef.current !== null) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    setToast({ message, type });
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimeoutRef.current = null;
+    }, 3000);
+  };
 
   const fetchHistory = async () => {
     if (!docContent?.id) return;
@@ -87,7 +102,6 @@ export function DocumentViewer({
         setHistoricalContent(data.content ?? null);
         setHistoricalPatch(data.patch ?? null);
         setHistoricalMetadata(data.metadata ?? null);
-        setPatchFilter('all');
       }
     } catch (error) {
       console.error("Failed to fetch version:", error);
@@ -136,8 +150,37 @@ export function DocumentViewer({
       setIsEditing(false);
     } catch (err) {
       console.error("Failed to save:", err);
-      // TODO: Show error toast
-      alert("Failed to save document");
+      showToast("Failed to save document", "error");
+    }
+  };
+
+  const handleShareLink = (format: "external" | "internal") => {
+    if (!docContent?.id || typeof window === "undefined") return;
+    try {
+      const { origin, pathname } = window.location;
+      const basePath = pathname.split("#")[0].split("?")[0] || "/";
+      const encodedId = encodeURIComponent(docContent.id);
+      const internalUrl = `${basePath}?doc=${encodedId}`;
+      const externalUrl = `${origin}${internalUrl}`;
+      const urlToCopy = format === "external" ? externalUrl : internalUrl;
+      const label = format === "external" ? "External" : "Internal";
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(urlToCopy).then(
+          () => {
+            console.info(`${label} share link: ${urlToCopy}`);
+            showToast(urlToCopy, "success");
+          },
+          (err) => {
+            console.error(`Failed to copy ${label.toLowerCase()} link:`, err);
+            window.prompt(`Copy this ${label.toLowerCase()} link:`, urlToCopy);
+          },
+        );
+      } else {
+        window.prompt(`Copy this ${label.toLowerCase()} link:`, urlToCopy);
+      }
+    } catch (error) {
+      console.error("Failed to build share URL:", error);
     }
   };
 
@@ -260,6 +303,38 @@ export function DocumentViewer({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {docContent && !isEditing && (
+            <div className="relative">
+              <button
+                onClick={() => setIsShareMenuOpen((prev) => !prev)}
+                className="text-xs px-2 py-0.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-md shadow-sm transition-colors flex items-center gap-1"
+                title="Copy shareable link"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-1.414 1.414a4 4 0 105.656 5.656l1.414-1.414M10.172 13.828a4 4 0 005.656 0l1.414-1.414a4 4 0 10-5.656-5.656l-1.414 1.414" />
+                </svg>
+                Share
+              </button>
+              {isShareMenuOpen && (
+                <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-200 rounded-md shadow-lg text-xs py-1 z-10">
+                  <button
+                    type="button"
+                    onClick={() => { handleShareLink("external"); setIsShareMenuOpen(false); }}
+                    className="w-full text-left px-3 py-1 hover:bg-slate-50"
+                  >
+                    Copy full browser URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { handleShareLink("internal"); setIsShareMenuOpen(false); }}
+                    className="w-full text-left px-3 py-1 hover:bg-slate-50"
+                  >
+                    Copy in-app URL
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {docContent && !showSections && !isEditing && (
             <button
               onClick={() => setShowSections(true)}
@@ -398,6 +473,8 @@ export function DocumentViewer({
           </div>
         </div>
       )}
+
+      {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
   );
 }
