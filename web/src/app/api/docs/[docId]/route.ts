@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { ingestFile, removeDocumentFromVectorStore } from "@/lib/rag/ingestor";
-import { saveHistory, deleteHistoryTree, moveHistoryTree } from "@/lib/history";
+import { ingestHistoryVersion } from "@/lib/rag/diffIngestor";
+import { saveHistory, deleteHistoryTree, moveHistoryTree, HistoryPatchMetadata } from "@/lib/history";
 
 // Helper to get DOCS_ROOT
 const getDocsRoot = () => {
@@ -333,7 +334,7 @@ export async function PUT(
     const { docId: rawDocId } = await params;
     const docId = decodeURIComponent(rawDocId);
     const sanitizedDocId = sanitizeDocId(docId);
-    const { content, historyMetadata } = await request.json();
+    const { content, historyMetadata, historySummaryModel } = await request.json();
 
     if (typeof content !== "string") {
       return NextResponse.json(
@@ -365,7 +366,19 @@ export async function PUT(
 
     // Save history (Reverse Delta)
     if (oldContent) {
-       await saveHistory(sanitizedDocId, oldContent, content, historyMetadata ?? null);
+       const timestamp = await saveHistory(sanitizedDocId, oldContent, content, historyMetadata ?? null);
+       
+       if (timestamp) {
+         // Determine priority
+         let priority: "high" | "low" = "low";
+         if (historyMetadata && historyMetadata.hunks) {
+           const hasHigh = historyMetadata.hunks.some((h: any) => h.priority === "high");
+           if (hasHigh) priority = "high";
+         }
+
+         // Ingest history version (awaiting to ensure it completes, can be made async if too slow)
+         await ingestHistoryVersion(sanitizedDocId, timestamp, priority, historySummaryModel);
+       }
     }
     
     // Save updated content

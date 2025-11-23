@@ -157,7 +157,11 @@ export function DocumentViewer({
       const res = await fetch(`/api/docs/${encodedId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent, historyMetadata: historyMetadata ?? null }),
+        body: JSON.stringify({ 
+          content: newContent, 
+          historyMetadata: historyMetadata ?? null,
+          historySummaryModel: settings.historySummaryModel 
+        }),
       });
       
       if (!res.ok) {
