@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { ingestFile, removeDocumentFromVectorStore } from "@/lib/rag/ingestor";
-import { saveHistory } from "@/lib/history";
+import { saveHistory, deleteHistoryTree, moveHistoryTree } from "@/lib/history";
 
 // Helper to get DOCS_ROOT
 const getDocsRoot = () => {
@@ -178,6 +178,7 @@ export async function DELETE(
 
     if (stats.isDirectory()) {
       await removeDirectoryFromVectorStore(filePath, docsRoot);
+      await deleteHistoryTree(sanitizedDocId);
       await fs.rm(filePath, { recursive: true, force: true });
     } else {
       // Delete the file
@@ -185,6 +186,7 @@ export async function DELETE(
 
       // Remove embeddings from the vector store
       await removeDocumentFromVectorStore(sanitizedDocId);
+      await deleteHistoryTree(sanitizedDocId);
     }
     
     return NextResponse.json({ 
@@ -268,6 +270,7 @@ export async function PATCH(
 
       // Re-ingest all supported documents under the new folder path
       await ingestDirectoryFiles(newPath, docsRoot);
+      await moveHistoryTree(sanitizedDocId, path.relative(docsRoot, newPath));
     } else {
       // For files, only allow renaming the basename while preserving the
       // original extension. Changing the extension (type) is not allowed.
@@ -303,6 +306,7 @@ export async function PATCH(
       // Remove old embeddings and re-ingest the file under the new docId
       await removeDocumentFromVectorStore(sanitizedDocId);
       await ingestFile(newPath, docsRoot);
+      await moveHistoryTree(sanitizedDocId, path.relative(docsRoot, newPath));
     }
 
     const newDocId = path.relative(docsRoot, newPath);

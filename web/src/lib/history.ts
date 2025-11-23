@@ -204,3 +204,47 @@ export async function getPatchMetadata(docId: string, timestamp: string): Promis
     return null;
   }
 }
+
+export async function deleteHistoryTree(docId: string): Promise<void> {
+  try {
+    const historyRoot = getHistoryRoot();
+    const targetPath = path.join(historyRoot, docId);
+    await fs.rm(targetPath, { recursive: true, force: true });
+  } catch (error) {
+    console.error("Failed to delete history tree:", error);
+  }
+}
+
+export async function moveHistoryTree(oldDocId: string, newDocId: string): Promise<void> {
+  if (!oldDocId || !newDocId || oldDocId === newDocId) {
+    return;
+  }
+
+  try {
+    const historyRoot = getHistoryRoot();
+    const oldPath = path.join(historyRoot, oldDocId);
+    const newPath = path.join(historyRoot, newDocId);
+
+    const exists = await fs.access(oldPath).then(() => true).catch(() => false);
+    if (!exists) {
+      return;
+    }
+
+    await fs.mkdir(path.dirname(newPath), { recursive: true });
+
+    const newExists = await fs.access(newPath).then(() => true).catch(() => false);
+    if (newExists) {
+      console.warn(
+        `History target already exists for ${newDocId}, skipping move to avoid overwriting.`,
+      );
+      return;
+    }
+
+    await fs.rename(oldPath, newPath);
+  } catch (error) {
+    console.error(
+      `Failed to move history tree from ${oldDocId} to ${newDocId}:`,
+      error,
+    );
+  }
+}
