@@ -16,9 +16,10 @@ const findNodeById = (nodes: DocNode[], id: string): DocNode | null => {
 interface UseDocumentActionsOptions {
   docs: DocNode[];
   onRefresh: () => void;
+  onNotify?: (message: string, type: "success" | "error") => void;
 }
 
-export function useDocumentActions({ docs, onRefresh }: UseDocumentActionsOptions) {
+export function useDocumentActions({ docs, onRefresh, onNotify }: UseDocumentActionsOptions) {
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [renamingDocId, setRenamingDocId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
@@ -31,16 +32,21 @@ export function useDocumentActions({ docs, onRefresh }: UseDocumentActionsOption
     if (!deletingDocId) return;
 
     try {
+      const node = findNodeById(docs, deletingDocId);
+      const name = node?.name ?? deletingDocId;
       const encodedId = encodeURIComponent(deletingDocId);
       const res = await fetch(`/api/docs/${encodedId}`, { method: "DELETE" });
 
       if (res.ok) {
         onRefresh();
+        onNotify?.(`Deleted "${name}"`, "success");
       } else {
         console.error("Failed to delete document");
+        onNotify?.("Failed to delete document", "error");
       }
     } catch (err) {
       console.error("Delete error:", err);
+      onNotify?.("Failed to delete document", "error");
     } finally {
       setDeletingDocId(null);
     }
@@ -62,6 +68,8 @@ export function useDocumentActions({ docs, onRefresh }: UseDocumentActionsOption
     if (!renamingDocId || !newName.trim()) return;
 
     try {
+      const node = findNodeById(docs, renamingDocId);
+      const oldName = node?.name ?? renamingDocId;
       const encodedId = encodeURIComponent(renamingDocId);
       const res = await fetch(`/api/docs/${encodedId}`, {
         method: "PATCH",
@@ -71,11 +79,14 @@ export function useDocumentActions({ docs, onRefresh }: UseDocumentActionsOption
 
       if (res.ok) {
         onRefresh();
+        onNotify?.(`Renamed "${oldName}" to "${newName.trim()}"`, "success");
       } else {
         console.error("Failed to rename document");
+        onNotify?.("Failed to rename document", "error");
       }
     } catch (err) {
       console.error("Rename error:", err);
+      onNotify?.("Failed to rename document", "error");
     } finally {
       setRenamingDocId(null);
       setNewName("");

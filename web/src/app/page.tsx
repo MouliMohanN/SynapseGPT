@@ -10,6 +10,7 @@ import { AboutModal } from "@/components/AboutModal";
 import { useSettings } from "@/hooks/useSettings";
 import { HeaderBar } from "@/components/HeaderBar";
 import { UploadModal } from "@/components/UploadModal";
+import { Toast } from "@/components/Toast";
 
 export default function HomePage() {
   // Settings
@@ -28,7 +29,9 @@ export default function HomePage() {
   const [isDraggingRight, setIsDraggingRight] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const toastTimeoutRef = React.useRef<number | null>(null);
+
   // Initialize panel widths from settings
   useEffect(() => {
     setRightPanelWidth(settings.defaultRightWidth);
@@ -41,6 +44,25 @@ export default function HomePage() {
       setSelectedDocId(docFromUrl);
     }
   }, [searchParams, selectedDocId]);
+
+  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
+    if (toastTimeoutRef.current !== null) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    setToast({ message, type });
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimeoutRef.current = null;
+    }, 3000);
+  }, []);
+
+  const handleSaveSettingsWithToast = useCallback(
+    (next: typeof settings) => {
+      handleSaveSettings(next);
+      showToast("Settings updated", "success");
+    },
+    [handleSaveSettings, showToast],
+  );
 
   const handleSelectDoc = useCallback(
     (id: string) => {
@@ -143,7 +165,7 @@ export default function HomePage() {
         <SettingsModal
           isOpen={showSettings}
           settings={settings}
-          onSave={handleSaveSettings}
+          onSave={handleSaveSettingsWithToast}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -156,8 +178,12 @@ export default function HomePage() {
       <UploadModal 
         isOpen={showUpload} 
         onClose={() => setShowUpload(false)} 
-        onUploadComplete={() => setDocsRefreshTrigger(v => v + 1)}
+        onUploadComplete={() => {
+          setDocsRefreshTrigger(v => v + 1);
+          showToast("Upload complete", "success");
+        }}
       />
+      {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
   );
 }

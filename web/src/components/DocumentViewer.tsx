@@ -166,6 +166,7 @@ export function DocumentViewer({
       
       onDocumentUpdate?.();
       setIsEditing(false);
+      showToast("Document saved", "success");
     } catch (err) {
       console.error("Failed to save:", err);
       showToast("Failed to save document", "error");
