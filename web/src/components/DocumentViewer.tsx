@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DocumentViewerSkeleton } from '@/components/Skeleton';
 import type { DocumentContent } from '@/lib/types';
+import type { HistoryPatchMetadata } from '@/lib/history';
 import { DocumentEditor } from './Editor/DocumentEditor';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { HistorySidebar } from './History/HistorySidebar';
@@ -37,7 +38,10 @@ export function DocumentViewer({
   const [selectedVersionTimestamp, setSelectedVersionTimestamp] = useState<string | null>(null);
   const [historicalContent, setHistoricalContent] = useState<string | null>(null);
   const [historicalPatch, setHistoricalPatch] = useState<string | null>(null);
+  const [historicalMetadata, setHistoricalMetadata] = useState<any | null>(null);
+  const [patchFilter, setPatchFilter] = useState<'all' | 'high' | 'low'>('all');
   const [historyViewMode, setHistoryViewMode] = useState<'diff' | 'patch'>('diff');
+  const [isHistoryFullScreen, setIsHistoryFullScreen] = useState(false);
 
   const fetchHistory = async () => {
     if (!docContent?.id) return;
@@ -59,6 +63,9 @@ export function DocumentViewer({
       setSelectedVersionTimestamp(null);
       setHistoricalContent(null);
       setHistoricalPatch(null);
+      setHistoricalMetadata(null);
+      setPatchFilter('all');
+      setIsHistoryFullScreen(false);
     }
     setShowHistory(!showHistory);
   };
@@ -79,6 +86,8 @@ export function DocumentViewer({
         const data = await res.json();
         setHistoricalContent(data.content ?? null);
         setHistoricalPatch(data.patch ?? null);
+        setHistoricalMetadata(data.metadata ?? null);
+        setPatchFilter('all');
       }
     } catch (error) {
       console.error("Failed to fetch version:", error);
@@ -91,9 +100,24 @@ export function DocumentViewer({
     setShowHistory(false);
     setSelectedVersionTimestamp(null);
     setHistoricalContent(null);
+    setHistoricalPatch(null);
+    setHistoricalMetadata(null);
+    setPatchFilter('all');
+    setHistoryViewMode('diff');
+    setIsHistoryFullScreen(false);
   }, [docContent?.id]);
 
-  const handleSaveEdit = async (newContent: string) => {
+  // Prevent background scrolling when history is shown full screen
+  React.useEffect(() => {
+    if (!isHistoryFullScreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isHistoryFullScreen]);
+
+  const handleSaveEdit = async (newContent: string, historyMetadata?: HistoryPatchMetadata | null) => {
     if (!docContent?.id) return;
     
     try {
@@ -101,7 +125,7 @@ export function DocumentViewer({
       const res = await fetch(`/api/docs/${encodedId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
+        body: JSON.stringify({ content: newContent, historyMetadata: historyMetadata ?? null }),
       });
       
       if (!res.ok) {
@@ -115,6 +139,112 @@ export function DocumentViewer({
       // TODO: Show error toast
       alert("Failed to save document");
     }
+  };
+
+  const renderHistoryModeToggle = () => (
+    <div className="inline-flex items-center rounded-full bg-slate-200 p-0.5 text-[10px]">
+      <button
+        type="button"
+        onClick={() => setHistoryViewMode('diff')}
+        className={`px-2 py-0.5 rounded-full ${
+          historyViewMode === 'diff'
+            ? 'bg-white text-purple-700 shadow-sm'
+            : 'text-slate-600 hover:text-slate-800'
+        }`}
+      >
+        Diff
+      </button>
+      <button
+        type="button"
+        onClick={() => setHistoryViewMode('patch')}
+        disabled={!historicalPatch}
+        className={`ml-0.5 px-2 py-0.5 rounded-full ${
+          historyViewMode === 'patch'
+            ? 'bg-white text-purple-700 shadow-sm'
+            : 'text-slate-600 hover:text-slate-800'
+        } ${!historicalPatch ? 'opacity-40 cursor-not-allowed' : ''}`}
+      >
+        Patch
+      </button>
+    </div>
+  );
+
+  const renderHistoryFilterPills = () => {
+    if (!historicalPatch) return null;
+    return (
+      <div className="inline-flex items-center rounded-full bg-slate-200 p-0.5 text-[10px]">
+        <button
+          type="button"
+          onClick={() => setPatchFilter('all')}
+          className={`px-2 py-0.5 rounded-full ${
+            patchFilter === 'all'
+              ? 'bg-white text-slate-800 shadow-sm'
+              : 'text-slate-600 hover:text-slate-800'
+          }`}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          onClick={() => setPatchFilter('high')}
+          className={`ml-0.5 px-2 py-0.5 rounded-full ${
+            patchFilter === 'high'
+              ? 'bg-white text-green-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-800'
+          }`}
+        >
+          High
+        </button>
+        <button
+          type="button"
+          onClick={() => setPatchFilter('low')}
+          className={`ml-0.5 px-2 py-0.5 rounded-full ${
+            patchFilter === 'low'
+              ? 'bg-white text-red-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-800'
+          }`}
+        >
+          Low
+        </button>
+      </div>
+    );
+  };
+
+  const renderHistoryHeader = (variant: 'inline' | 'fullscreen') => {
+    const paddingX = variant === 'inline' ? 'px-3' : 'px-4';
+    const title =
+      historyViewMode === 'diff'
+        ? 'Changes vs current version'
+        : 'Exact patch for this save';
+
+    return (
+      <div
+        className={`flex items-center justify-between ${paddingX} py-2 border-b border-slate-200 bg-slate-50`}
+      >
+        <div className="text-[11px] font-medium text-slate-600">{title}</div>
+        <div className="flex items-center gap-2">
+          {renderHistoryModeToggle()}
+          {renderHistoryFilterPills()}
+          {variant === 'inline' ? (
+            <button
+              type="button"
+              onClick={() => setIsHistoryFullScreen(true)}
+              className="text-[10px] px-2 py-0.5 rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100"
+            >
+              Full Screen
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsHistoryFullScreen(false)}
+              className="text-xs text-slate-500 hover:text-slate-800"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -188,33 +318,22 @@ export function DocumentViewer({
              <div className="flex-1 flex flex-col overflow-hidden">
                 {selectedVersionTimestamp && (historicalContent || historicalPatch) ? (
                   <div className="flex-1 flex flex-col overflow-hidden bg-white">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
-                      <div className="text-[11px] font-medium text-slate-600">
-                        {historyViewMode === 'diff' ? 'Changes vs current version' : 'Exact patch for this save'}
-                      </div>
-                      <div className="inline-flex items-center rounded-full bg-slate-200 p-0.5 text-[10px]">
-                        <button
-                          type="button"
-                          onClick={() => setHistoryViewMode('diff')}
-                          className={`px-2 py-0.5 rounded-full ${historyViewMode === 'diff' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-                        >
-                          Diff
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setHistoryViewMode('patch')}
-                          disabled={!historicalPatch}
-                          className={`ml-0.5 px-2 py-0.5 rounded-full ${historyViewMode === 'patch' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'} ${!historicalPatch ? 'opacity-40 cursor-not-allowed' : ''}`}
-                        >
-                          Patch
-                        </button>
-                      </div>
-                    </div>
+                    {renderHistoryHeader('inline')}
 
                     {historyViewMode === 'patch' && historicalPatch ? (
-                      <PatchViewer patch={historicalPatch} />
+                      <PatchViewer
+                        patch={historicalPatch}
+                        metadata={historicalMetadata ?? undefined}
+                        filter={patchFilter}
+                      />
                     ) : historyViewMode === 'diff' && historicalContent ? (
-                      <DiffViewer oldContent={historicalContent} newContent={docContent.rawText} />
+                      <DiffViewer
+                        oldContent={historicalContent}
+                        newContent={docContent.rawText}
+                        patch={historicalPatch ?? undefined}
+                        metadata={historicalMetadata ?? undefined}
+                        filter={patchFilter}
+                      />
                     ) : (
                       <div className="flex-1 flex items-center justify-center text-slate-400 bg-slate-50 text-xs">
                         {historyViewMode === 'patch' ? 'No patch available for this version' : 'Unable to load diff for this version'}
@@ -249,6 +368,35 @@ export function DocumentViewer({
             </div>
           </ErrorBoundary>
         )
+      )}
+
+      {docContent && showHistory && isHistoryFullScreen && selectedVersionTimestamp && (historicalContent || historicalPatch) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden">
+            {renderHistoryHeader('fullscreen')}
+            <div className="flex-1 min-h-0 flex">
+              {historyViewMode === 'patch' && historicalPatch ? (
+                <PatchViewer
+                  patch={historicalPatch}
+                  metadata={historicalMetadata ?? undefined}
+                  filter={patchFilter}
+                />
+              ) : historyViewMode === 'diff' && historicalContent ? (
+                <DiffViewer
+                  oldContent={historicalContent}
+                  newContent={docContent.rawText}
+                  patch={historicalPatch ?? undefined}
+                  metadata={historicalMetadata ?? undefined}
+                  filter={patchFilter}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-slate-400 bg-slate-50 text-xs">
+                  {historyViewMode === 'patch' ? 'No patch available for this version' : 'Unable to load diff for this version'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

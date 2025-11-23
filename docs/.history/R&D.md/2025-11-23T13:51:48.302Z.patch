@@ -1,0 +1,24 @@
+Index: R&D.md
+===================================================================
+--- R&D.md
++++ R&D.md
+@@ -7,9 +7,8 @@
+ 4. RN app Automation 
+ 	1. Best practices
+ 	2. Use AI
+ 	3. NodeJs script to write id's for the views/components
+-    4. Test edit 1_1
+ 5. App Security
+ 	1. Reverse Engineering, smali - done
+ 	2. Penitration Testing
+ 	3. Uninstall modified apk
+@@ -232,9 +231,8 @@
+ 	1. Network logger is disabled on prod. 
+ 	2. File logging and sharing is good enough
+ 		1. Just make sure the logs are configured for auto deleted 
+ 		2. Logs are sharable
+-        3. Test Edit 1_2
+ 11. CarousalTabs in Screeners - Done. 
+ 	1. Tried implementing in ScripViewDetail page, faced few challenges, later decided to implement during the new screens 
+ 12. React Navigation performance - React.Lazy loading screens will have perf benefits on ReactJs web but doesn't have any perf benefits on React Native - POC done
+ 13. Lazy import components within the screen and evaluate if it's worth it. Ex: Button component.

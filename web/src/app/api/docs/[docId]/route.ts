@@ -329,7 +329,7 @@ export async function PUT(
     const { docId: rawDocId } = await params;
     const docId = decodeURIComponent(rawDocId);
     const sanitizedDocId = sanitizeDocId(docId);
-    const { content } = await request.json();
+    const { content, historyMetadata } = await request.json();
 
     if (typeof content !== "string") {
       return NextResponse.json(
@@ -354,14 +354,14 @@ export async function PUT(
     let oldContent = "";
     try {
       oldContent = await fs.readFile(filePath, "utf-8");
-    } catch (e) {
+    } catch (error) {
       // File might not exist or be readable, just ignore history for this first save
-      console.log("No previous content found for history.");
+      console.log("No previous content found for history.", error);
     }
 
     // Save history (Reverse Delta)
     if (oldContent) {
-       await saveHistory(sanitizedDocId, oldContent, content);
+       await saveHistory(sanitizedDocId, oldContent, content, historyMetadata ?? null);
     }
     
     // Save updated content

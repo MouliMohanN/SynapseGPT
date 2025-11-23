@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getVersion, getPatch } from "@/lib/history";
+import { getVersion, getPatch, getPatchMetadata } from "@/lib/history";
 
 export async function GET(
   request: Request,
@@ -10,19 +10,20 @@ export async function GET(
     const docId = decodeURIComponent(rawDocId);
     const sanitizedDocId = docId.replace(/\.\./g, "").replace(/^\/+/, "");
 
-    const [content, patch] = await Promise.all([
+    const [content, patch, metadata] = await Promise.all([
       getVersion(sanitizedDocId, timestamp),
       getPatch(sanitizedDocId, timestamp),
+      getPatchMetadata(sanitizedDocId, timestamp),
     ]);
     
-    if (content === null && patch === null) {
+    if (content === null && patch === null && metadata === null) {
       return NextResponse.json(
         { error: "Version not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ content, patch });
+    return NextResponse.json({ content, patch, metadata });
   } catch (error) {
     console.error("Get version error:", error);
     return NextResponse.json(

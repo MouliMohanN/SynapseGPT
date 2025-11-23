@@ -3,11 +3,13 @@ import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { EditorView } from "@codemirror/view";
+import { createPatch } from "diff";
 import { ghostTextExtension } from "./GhostTextExtension";
 import { MarkdownRenderer } from "../MarkdownRenderer";
 import { HistorySidebar } from "../History/HistorySidebar";
 import { DiffViewer } from "../History/DiffViewer";
 import { PatchViewer } from "../History/PatchViewer";
+import type { HistoryPatchMetadata } from "@/lib/history";
 
 const editorTheme = EditorView.theme({
   ".cm-selectionBackground, .cm-content ::selection": {
@@ -23,7 +25,7 @@ const editorTheme = EditorView.theme({
 
 interface DocumentEditorProps {
   initialContent: string;
-  onSave: (content: string) => Promise<void>;
+  onSave: (content: string, historyMetadata?: HistoryPatchMetadata | null) => Promise<void>;
   onCancel: () => void;
   autocompleteSettings: {
     enabled: boolean;
@@ -60,6 +62,15 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [historicalContent, setHistoricalContent] = useState<string | null>(null);
   const [historicalPatch, setHistoricalPatch] = useState<string | null>(null);
   const [historyViewMode, setHistoryViewMode] = useState<'diff' | 'patch'>('diff');
+  const [historicalMetadata, setHistoricalMetadata] = useState<any | null>(null);
+  const [patchFilter, setPatchFilter] = useState<'all' | 'high' | 'low'>('all');
+  const [isHistoryFullScreen, setIsHistoryFullScreen] = useState(false);
+
+  // Pre-save review state
+  const [showPreSaveReview, setShowPreSaveReview] = useState(false);
+  const [preSavePatch, setPreSavePatch] = useState<string | null>(null);
+  const [preSaveMetadata, setPreSaveMetadata] = useState<HistoryPatchMetadata | null>(null);
+  const [preSaveFilter, setPreSaveFilter] = useState<'all' | 'high' | 'low'>('all');
 
   const fetchHistory = async () => {
     try {
@@ -81,6 +92,9 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       setSelectedVersionTimestamp(null);
       setHistoricalContent(null);
       setHistoricalPatch(null);
+      setHistoricalMetadata(null);
+      setPatchFilter('all');
+      setIsHistoryFullScreen(false);
     }
     setShowHistory(!showHistory);
   };
@@ -100,6 +114,8 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         const data = await res.json();
         setHistoricalContent(data.content ?? null);
         setHistoricalPatch(data.patch ?? null);
+        setHistoricalMetadata(data.metadata ?? null);
+        setPatchFilter('all');
       }
     } catch (error) {
       console.error("Failed to fetch version:", error);
@@ -107,13 +123,37 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   };
 
   const handleSave = useCallback(async () => {
-    setIsSaving(true);
-    try {
-      await onSave(content);
-    } finally {
-      setIsSaving(false);
+    if (isSaving) return;
+
+    // If nothing changed, save directly without history metadata
+    if (content === initialContent) {
+      setIsSaving(true);
+      try {
+        await onSave(content, null);
+      } finally {
+        setIsSaving(false);
+      }
+      return;
     }
-  }, [content, onSave]);
+
+    // Show pre-save review with patch preview and chunk-level priorities
+    const patch = createPatch(docId || "document", content, initialContent);
+    setPreSavePatch(patch);
+    // Metadata will hold only explicitly low-priority hunks; default is High
+    setPreSaveMetadata({ hunks: [] });
+    setPreSaveFilter('all');
+    setShowPreSaveReview(true);
+  }, [content, initialContent, docId, isSaving, onSave]);
+
+  // Prevent background scrolling when history modal is full screen
+  useEffect(() => {
+    if (!isHistoryFullScreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isHistoryFullScreen]);
 
   // Handle Cmd+S / Ctrl+S to save
   useEffect(() => {
@@ -161,6 +201,112 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       {children}
     </button>
   );
+
+  const renderHistoryModeToggle = () => (
+    <div className="inline-flex items-center rounded-full bg-slate-200 p-0.5 text-[10px]">
+      <button
+        type="button"
+        onClick={() => setHistoryViewMode('diff')}
+        className={`px-2 py-0.5 rounded-full ${
+          historyViewMode === 'diff'
+            ? 'bg-white text-purple-700 shadow-sm'
+            : 'text-slate-600 hover:text-slate-800'
+        }`}
+      >
+        Diff
+      </button>
+      <button
+        type="button"
+        onClick={() => setHistoryViewMode('patch')}
+        disabled={!historicalPatch}
+        className={`ml-0.5 px-2 py-0.5 rounded-full ${
+          historyViewMode === 'patch'
+            ? 'bg-white text-purple-700 shadow-sm'
+            : 'text-slate-600 hover:text-slate-800'
+        } ${!historicalPatch ? 'opacity-40 cursor-not-allowed' : ''}`}
+      >
+        Patch
+      </button>
+    </div>
+  );
+
+  const renderHistoryFilterPills = () => {
+    if (!historicalPatch) return null;
+    return (
+      <div className="inline-flex items-center rounded-full bg-slate-200 p-0.5 text-[10px]">
+        <button
+          type="button"
+          onClick={() => setPatchFilter('all')}
+          className={`px-2 py-0.5 rounded-full ${
+            patchFilter === 'all'
+              ? 'bg-white text-slate-800 shadow-sm'
+              : 'text-slate-600 hover:text-slate-800'
+          }`}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          onClick={() => setPatchFilter('high')}
+          className={`ml-0.5 px-2 py-0.5 rounded-full ${
+            patchFilter === 'high'
+              ? 'bg-white text-green-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-800'
+          }`}
+        >
+          High
+        </button>
+        <button
+          type="button"
+          onClick={() => setPatchFilter('low')}
+          className={`ml-0.5 px-2 py-0.5 rounded-full ${
+            patchFilter === 'low'
+              ? 'bg-white text-red-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-800'
+          }`}
+        >
+          Low
+        </button>
+      </div>
+    );
+  };
+
+  const renderHistoryHeader = (variant: 'inline' | 'fullscreen') => {
+    const paddingX = variant === 'inline' ? 'px-3' : 'px-4';
+    const title =
+      historyViewMode === 'diff'
+        ? 'Changes vs current editor content'
+        : 'Exact patch for this save';
+
+    return (
+      <div
+        className={`flex items-center justify-between ${paddingX} py-2 border-b border-slate-200 bg-slate-50`}
+      >
+        <div className="text-[11px] font-medium text-slate-600">{title}</div>
+        <div className="flex items-center gap-2">
+          {renderHistoryModeToggle()}
+          {renderHistoryFilterPills()}
+          {variant === 'inline' ? (
+            <button
+              type="button"
+              onClick={() => setIsHistoryFullScreen(true)}
+              className="text-[10px] px-2 py-0.5 rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100"
+            >
+              Full Screen
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsHistoryFullScreen(false)}
+              className="text-xs text-slate-500 hover:text-slate-800"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className={`flex flex-col bg-white ${isFullScreen ? 'fixed inset-0 z-50' : 'flex-1 min-h-[500px]'}`}>
@@ -248,6 +394,35 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
               </svg>
             )}
+
+      {showHistory && isHistoryFullScreen && selectedVersionTimestamp && (historicalContent || historicalPatch) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden">
+            {renderHistoryHeader('fullscreen')}
+            <div className="flex-1 min-h-0 flex">
+              {historyViewMode === 'patch' && historicalPatch ? (
+                <PatchViewer
+                  patch={historicalPatch}
+                  metadata={historicalMetadata ?? undefined}
+                  filter={patchFilter}
+                />
+              ) : historyViewMode === 'diff' && historicalContent ? (
+                <DiffViewer
+                  oldContent={historicalContent}
+                  newContent={content}
+                  patch={historicalPatch ?? undefined}
+                  metadata={historicalMetadata ?? undefined}
+                  filter={patchFilter}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-slate-400 bg-slate-50 text-xs">
+                  {historyViewMode === 'patch' ? 'No patch available for this version' : 'Unable to load diff for this version'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
           </ToolbarButton>
           <ToolbarButton onClick={() => setIsFullScreen(!isFullScreen)} title={isFullScreen ? "Exit Full Screen" : "Full Screen"} active={isFullScreen}>
              {isFullScreen ? (
@@ -338,33 +513,22 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
              <div className="flex-1 flex flex-col overflow-hidden">
                {selectedVersionTimestamp && (historicalContent || historicalPatch) ? (
                   <div className="flex-1 flex flex-col overflow-hidden bg-white">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
-                      <div className="text-[11px] font-medium text-slate-600">
-                        {historyViewMode === 'diff' ? 'Changes vs current editor content' : 'Exact patch for this save'}
-                      </div>
-                      <div className="inline-flex items-center rounded-full bg-slate-200 p-0.5 text-[10px]">
-                        <button
-                          type="button"
-                          onClick={() => setHistoryViewMode('diff')}
-                          className={`px-2 py-0.5 rounded-full ${historyViewMode === 'diff' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-                        >
-                          Diff
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setHistoryViewMode('patch')}
-                          disabled={!historicalPatch}
-                          className={`ml-0.5 px-2 py-0.5 rounded-full ${historyViewMode === 'patch' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'} ${!historicalPatch ? 'opacity-40 cursor-not-allowed' : ''}`}
-                        >
-                          Patch
-                        </button>
-                      </div>
-                    </div>
+                    {renderHistoryHeader('inline')}
 
                     {historyViewMode === 'patch' && historicalPatch ? (
-                      <PatchViewer patch={historicalPatch} />
+                      <PatchViewer
+                        patch={historicalPatch}
+                        metadata={historicalMetadata ?? undefined}
+                        filter={patchFilter}
+                      />
                     ) : historyViewMode === 'diff' && historicalContent ? (
-                      <DiffViewer oldContent={historicalContent} newContent={content} />
+                      <DiffViewer
+                        oldContent={historicalContent}
+                        newContent={content}
+                        patch={historicalPatch ?? undefined}
+                        metadata={historicalMetadata ?? undefined}
+                        filter={patchFilter}
+                      />
                     ) : (
                       <div className="flex-1 flex items-center justify-center text-slate-400 bg-slate-50 text-xs">
                         {historyViewMode === 'patch' ? 'No patch available for this version' : 'Unable to load diff for this version'}
@@ -433,6 +597,106 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               {isSaving ? "Saving..." : "Save"}
             </button>
          </div>
+      )}
+
+      {/* Pre-save review modal */}
+      {showPreSaveReview && preSavePatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">Review changes before saving</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Mark important hunks as High priority. These priorities will be stored with the history patch.
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center rounded-full bg-slate-200 p-0.5 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setPreSaveFilter('all')}
+                    className={`px-2 py-0.5 rounded-full ${preSaveFilter === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                  >
+                    All Hunks
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreSaveFilter('high')}
+                    className={`ml-0.5 px-2 py-0.5 rounded-full ${preSaveFilter === 'high' ? 'bg-white text-green-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                  >
+                    High Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreSaveFilter('low')}
+                    className={`ml-0.5 px-2 py-0.5 rounded-full ${preSaveFilter === 'low' ? 'bg-white text-red-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                  >
+                    Low Only
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPreSaveReview(false);
+                    setPreSavePatch(null);
+                    setPreSaveMetadata(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-700 text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0">
+              <PatchViewer
+                patch={preSavePatch}
+                metadata={preSaveMetadata ?? { hunks: [] }}
+                filter={preSaveFilter}
+                interactive
+                onChangeMetadata={(next) => setPreSaveMetadata(next)}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPreSaveReview(false);
+                  setPreSavePatch(null);
+                  setPreSaveMetadata(null);
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50"
+              >
+                Back to Editing
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={async () => {
+                  if (isSaving) return;
+                  setIsSaving(true);
+                  try {
+                    const metadataToSend: HistoryPatchMetadata | null = preSaveMetadata
+                      ? {
+                          hunks: preSaveMetadata.hunks.filter((h) => h.priority === 'low'),
+                        }
+                      : null;
+                    await onSave(content, metadataToSend);
+                    setShowPreSaveReview(false);
+                    setPreSavePatch(null);
+                    setPreSaveMetadata(null);
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                className="px-4 py-1.5 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? 'Saving…' : 'Save with Priorities'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

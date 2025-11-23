@@ -20,6 +20,17 @@ export interface HistoryVersion {
   size: number;
 }
 
+export type HistoryPriority = "low" | "high";
+
+export interface HistoryHunkPriority {
+  index: number;
+  priority: HistoryPriority;
+}
+
+export interface HistoryPatchMetadata {
+  hunks: HistoryHunkPriority[];
+}
+
 /**
  * Saves a "Reverse Patch" so we can reconstruct the old content from the new content later.
  * 
@@ -27,7 +38,12 @@ export interface HistoryVersion {
  * @param oldContent The content BEFORE the update
  * @param newContent The content AFTER the update
  */
-export async function saveHistory(docId: string, oldContent: string, newContent: string) {
+export async function saveHistory(
+  docId: string,
+  oldContent: string,
+  newContent: string,
+  metadata?: HistoryPatchMetadata | null,
+) {
   try {
     const historyRoot = getHistoryRoot();
     const docHistoryDir = path.join(historyRoot, docId);
@@ -44,6 +60,11 @@ export async function saveHistory(docId: string, oldContent: string, newContent:
 
     const patchPath = path.join(docHistoryDir, `${timestamp}.patch`);
     await fs.writeFile(patchPath, patch, "utf-8");
+
+    if (metadata && Array.isArray(metadata.hunks) && metadata.hunks.length > 0) {
+      const metaPath = path.join(docHistoryDir, `${timestamp}.meta.json`);
+      await fs.writeFile(metaPath, JSON.stringify(metadata), "utf-8");
+    }
     
     console.log(`Saved history patch for ${docId} at ${timestamp}`);
   } catch (error) {
@@ -159,6 +180,27 @@ export async function getPatch(docId: string, timestamp: string): Promise<string
     return patchContent;
   } catch (error) {
     console.error("Failed to read patch:", error);
+    return null;
+  }
+}
+
+export async function getPatchMetadata(docId: string, timestamp: string): Promise<HistoryPatchMetadata | null> {
+  try {
+    const historyRoot = getHistoryRoot();
+    const docHistoryDir = path.join(historyRoot, docId);
+    const metaPath = path.join(docHistoryDir, `${timestamp}.meta.json`);
+    const exists = await fs.access(metaPath).then(() => true).catch(() => false);
+    if (!exists) {
+      return null;
+    }
+    const raw = await fs.readFile(metaPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as any).hunks)) {
+      return null;
+    }
+    return parsed as HistoryPatchMetadata;
+  } catch (error) {
+    console.error("Failed to read patch metadata:", error);
     return null;
   }
 }
