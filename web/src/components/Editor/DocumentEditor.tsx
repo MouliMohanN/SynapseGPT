@@ -7,6 +7,7 @@ import { ghostTextExtension } from "./GhostTextExtension";
 import { MarkdownRenderer } from "../MarkdownRenderer";
 import { HistorySidebar } from "../History/HistorySidebar";
 import { DiffViewer } from "../History/DiffViewer";
+import { PatchViewer } from "../History/PatchViewer";
 
 const editorTheme = EditorView.theme({
   ".cm-selectionBackground, .cm-content ::selection": {
@@ -57,6 +58,8 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [historyVersions, setHistoryVersions] = useState<any[]>([]);
   const [selectedVersionTimestamp, setSelectedVersionTimestamp] = useState<string | null>(null);
   const [historicalContent, setHistoricalContent] = useState<string | null>(null);
+  const [historicalPatch, setHistoricalPatch] = useState<string | null>(null);
+  const [historyViewMode, setHistoryViewMode] = useState<'diff' | 'patch'>('diff');
 
   const fetchHistory = async () => {
     try {
@@ -77,6 +80,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       // Reset history state when closing
       setSelectedVersionTimestamp(null);
       setHistoricalContent(null);
+      setHistoricalPatch(null);
     }
     setShowHistory(!showHistory);
   };
@@ -85,6 +89,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     if (timestamp === 'current') {
       setSelectedVersionTimestamp(null);
       setHistoricalContent(null);
+      setHistoricalPatch(null);
       return;
     }
 
@@ -93,7 +98,8 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       const res = await fetch(`/api/docs/${encodeURIComponent(docId)}/history/${timestamp}`);
       if (res.ok) {
         const data = await res.json();
-        setHistoricalContent(data.content);
+        setHistoricalContent(data.content ?? null);
+        setHistoricalPatch(data.patch ?? null);
       }
     } catch (error) {
       console.error("Failed to fetch version:", error);
@@ -330,8 +336,41 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         {showHistory && (
           <div className="flex-1 flex overflow-hidden">
              <div className="flex-1 flex flex-col overflow-hidden">
-                {selectedVersionTimestamp && historicalContent ? (
-                  <DiffViewer oldContent={historicalContent} newContent={content} />
+               {selectedVersionTimestamp && (historicalContent || historicalPatch) ? (
+                  <div className="flex-1 flex flex-col overflow-hidden bg-white">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+                      <div className="text-[11px] font-medium text-slate-600">
+                        {historyViewMode === 'diff' ? 'Changes vs current editor content' : 'Exact patch for this save'}
+                      </div>
+                      <div className="inline-flex items-center rounded-full bg-slate-200 p-0.5 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setHistoryViewMode('diff')}
+                          className={`px-2 py-0.5 rounded-full ${historyViewMode === 'diff' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                        >
+                          Diff
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHistoryViewMode('patch')}
+                          disabled={!historicalPatch}
+                          className={`ml-0.5 px-2 py-0.5 rounded-full ${historyViewMode === 'patch' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'} ${!historicalPatch ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        >
+                          Patch
+                        </button>
+                      </div>
+                    </div>
+
+                    {historyViewMode === 'patch' && historicalPatch ? (
+                      <PatchViewer patch={historicalPatch} />
+                    ) : historyViewMode === 'diff' && historicalContent ? (
+                      <DiffViewer oldContent={historicalContent} newContent={content} />
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-slate-400 bg-slate-50 text-xs">
+                        {historyViewMode === 'patch' ? 'No patch available for this version' : 'Unable to load diff for this version'}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-slate-400">
                     Select a version to view changes

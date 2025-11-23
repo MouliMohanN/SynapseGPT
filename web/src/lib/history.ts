@@ -145,3 +145,20 @@ export async function getVersion(docId: string, targetTimestamp: string): Promis
     return null;
   }
 }
+
+export async function getPatch(docId: string, timestamp: string): Promise<string | null> {
+  try {
+    const historyRoot = getHistoryRoot();
+    const docHistoryDir = path.join(historyRoot, docId);
+    const patchPath = path.join(docHistoryDir, `${timestamp}.patch`);
+    const exists = await fs.access(patchPath).then(() => true).catch(() => false);
+    if (!exists) {
+      return null;
+    }
+    const patchContent = await fs.readFile(patchPath, "utf-8");
+    return patchContent;
+  } catch (error) {
+    console.error("Failed to read patch:", error);
+    return null;
+  }
+}
