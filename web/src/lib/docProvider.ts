@@ -67,7 +67,6 @@ async function buildNode(
 
     if (children.length === 0) {
       // Skip completely empty folders so the tree stays compact.
-      return null;
     }
 
     return {

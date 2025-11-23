@@ -16,6 +16,60 @@ const sanitizeDocId = (docId: string): string => {
   return docId.replace(/\.\./g, "").replace(/^\/+/, "");
 };
 
+const TEXT_EXTENSIONS = new Set([".md", ".txt", ".mdx"]);
+
+async function collectDocIdsInDirectory(
+  dirPath: string,
+  docsRoot: string,
+): Promise<string[]> {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  const docIds: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+
+    if (entry.isDirectory()) {
+      const childDocIds = await collectDocIdsInDirectory(fullPath, docsRoot);
+      docIds.push(...childDocIds);
+    } else if (entry.isFile()) {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (TEXT_EXTENSIONS.has(ext)) {
+        const relativePath = path.relative(docsRoot, fullPath);
+        docIds.push(relativePath);
+      }
+    }
+  }
+
+  return docIds;
+}
+
+async function removeDirectoryFromVectorStore(
+  dirPath: string,
+  docsRoot: string,
+) {
+  const docIds = await collectDocIdsInDirectory(dirPath, docsRoot);
+  for (const docId of docIds) {
+    await removeDocumentFromVectorStore(docId);
+  }
+}
+
+async function ingestDirectoryFiles(dirPath: string, docsRoot: string) {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+
+    if (entry.isDirectory()) {
+      await ingestDirectoryFiles(fullPath, docsRoot);
+    } else if (entry.isFile()) {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (TEXT_EXTENSIONS.has(ext)) {
+        await ingestFile(fullPath, docsRoot);
+      }
+    }
+  }
+}
+
 // GET - Fetch document content
 export async function GET(
   request: Request,
@@ -119,11 +173,18 @@ export async function DELETE(
       );
     }
 
-    // Delete the file
-    await fs.unlink(filePath);
+    const stats = await fs.stat(filePath);
 
-    // Remove embeddings from the vector store
-    await removeDocumentFromVectorStore(sanitizedDocId);
+    if (stats.isDirectory()) {
+      await removeDirectoryFromVectorStore(filePath, docsRoot);
+      await fs.rm(filePath, { recursive: true, force: true });
+    } else {
+      // Delete the file
+      await fs.unlink(filePath);
+
+      // Remove embeddings from the vector store
+      await removeDocumentFromVectorStore(sanitizedDocId);
+    }
     
     return NextResponse.json({ 
       success: true,
@@ -167,7 +228,6 @@ export async function PATCH(
 
     const docsRoot = getDocsRoot();
     const oldPath = path.join(docsRoot, sanitizedDocId);
-    const newPath = path.join(path.dirname(oldPath), sanitizedNewName);
 
     // Verify old file exists
     const realOldPath = await fs.realpath(oldPath).catch(() => null);
@@ -178,21 +238,71 @@ export async function PATCH(
       );
     }
 
-    // Check if new name already exists
-    const newExists = await fs.access(newPath).then(() => true).catch(() => false);
-    if (newExists) {
-      return NextResponse.json(
-        { error: "A file with that name already exists" },
-        { status: 409 }
-      );
+    const oldStats = await fs.stat(oldPath);
+    let newPath: string;
+
+    if (oldStats.isDirectory()) {
+      // Folders can be freely renamed using the provided name.
+      newPath = path.join(path.dirname(oldPath), sanitizedNewName);
+
+      // Check if new folder name already exists
+      const newExists = await fs.access(newPath).then(() => true).catch(() => false);
+      if (newExists) {
+        return NextResponse.json(
+          { error: "A file or folder with that name already exists" },
+          { status: 409 }
+        );
+      }
+
+      // Collect existing docIds under the old folder so we can remove them
+      // from the vector store before re-ingesting under the new path.
+      const oldDocIds = await collectDocIdsInDirectory(oldPath, docsRoot);
+
+      // Rename the folder on disk
+      await fs.rename(oldPath, newPath);
+
+      for (const id of oldDocIds) {
+        await removeDocumentFromVectorStore(id);
+      }
+
+      // Re-ingest all supported documents under the new folder path
+      await ingestDirectoryFiles(newPath, docsRoot);
+    } else {
+      // For files, only allow renaming the basename while preserving the
+      // original extension. Changing the extension (type) is not allowed.
+      const oldExt = path.extname(oldPath);
+      const requestedExt = path.extname(sanitizedNewName);
+
+      let baseName = sanitizedNewName;
+      if (requestedExt) {
+        if (requestedExt.toLowerCase() !== oldExt.toLowerCase()) {
+          return NextResponse.json(
+            { error: "Changing file type is not allowed" },
+            { status: 400 },
+          );
+        }
+        baseName = path.basename(sanitizedNewName, requestedExt);
+      }
+
+      const finalFileName = `${baseName}${oldExt}`;
+      newPath = path.join(path.dirname(oldPath), finalFileName);
+
+      // Check if a file with the target name already exists
+      const newExists = await fs.access(newPath).then(() => true).catch(() => false);
+      if (newExists) {
+        return NextResponse.json(
+          { error: "A file or folder with that name already exists" },
+          { status: 409 }
+        );
+      }
+
+      // Rename the file on disk
+      await fs.rename(oldPath, newPath);
+
+      // Remove old embeddings and re-ingest the file under the new docId
+      await removeDocumentFromVectorStore(sanitizedDocId);
+      await ingestFile(newPath, docsRoot);
     }
-
-    // Rename the file on disk
-    await fs.rename(oldPath, newPath);
-
-    // Remove old embeddings and re-ingest the file under the new docId
-    await removeDocumentFromVectorStore(sanitizedDocId);
-    await ingestFile(newPath, docsRoot);
 
     const newDocId = path.relative(docsRoot, newPath);
     return NextResponse.json({ 

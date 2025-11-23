@@ -24,6 +24,8 @@ export function CenterPane({
   const [isDocLoading, setIsDocLoading] = useState(false);
   const [docError, setDocError] = useState<string | null>(null);
 
+  const hasContent = !!docContent && docContent.rawText.trim().length > 0;
+
   const {
     summaryContent,
     isSummaryLoading,
@@ -31,7 +33,7 @@ export function CenterPane({
     summaryContentRef,
     handleGenerateSummary,
     stopSummaryGeneration,
-  } = useSummary(selectedDocId, settings);
+  } = useSummary(selectedDocId, settings, hasContent);
 
   // Load document function (extracted for reuse)
   const loadDoc = useCallback(async () => {
@@ -146,6 +148,7 @@ export function CenterPane({
             summaryContentRef={summaryContentRef}
             handleGenerateSummary={handleGenerateSummary}
             stopSummaryGeneration={stopSummaryGeneration}
+            canSummarize={hasContent}
           />
 
           <DocumentViewer

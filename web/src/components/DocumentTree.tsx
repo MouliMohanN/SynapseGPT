@@ -1,9 +1,12 @@
 import React from 'react';
+import type { DocNode } from '@/lib/types';
 import { DocTreeNode } from './DocumentTree/DocTreeNode';
 import { DeleteConfirmDialog } from './DocumentTree/DeleteConfirmDialog';
 import { RenameDialog } from './DocumentTree/RenameDialog';
 import { useDocumentTree } from './DocumentTree/useDocumentTree';
 import { useDocumentActions } from './DocumentTree/useDocumentActions';
+import { CreateFolderModal } from './CreateFolderModal';
+import { CreateFileModal } from './CreateFileModal';
 
 interface DocumentTreeProps {
   selectedDocId: string | null;
@@ -48,6 +51,47 @@ export function DocumentTree({
     cancelRename,
   } = useDocumentActions({ docs, onRefresh: loadDocs });
 
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = React.useState(false);
+  const [createFolderParentPath, setCreateFolderParentPath] = React.useState("");
+  const [isCreateFileOpen, setIsCreateFileOpen] = React.useState(false);
+  const [createFileParentPath, setCreateFileParentPath] = React.useState("");
+
+  const findNodeById = (nodes: DocNode[], id: string): DocNode | null => {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      if (node.children) {
+        const found = findNodeById(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const getParentPathForNewFolder = (): string => {
+    if (!selectedDocId) return "";
+    const node = findNodeById(docs, selectedDocId);
+    if (!node) return "";
+    if (node.type === "folder") {
+      return node.path;
+    }
+    const parts = (node.path || "").split("/").filter(Boolean);
+    if (parts.length <= 1) return "";
+    parts.pop();
+    return parts.join("/");
+  };
+
+  const handleCreateFolder = () => {
+    const parent = getParentPathForNewFolder();
+    setCreateFolderParentPath(parent);
+    setIsCreateFolderOpen(true);
+  };
+
+  const handleCreateFile = () => {
+    const parent = getParentPathForNewFolder();
+    setCreateFileParentPath(parent);
+    setIsCreateFileOpen(true);
+  };
+
   return (
     <section className="border-r border-slate-300 flex flex-col bg-white overflow-hidden" style={{ width: `${20}%` }}>
       <div className="border-b border-slate-300 px-4 py-3 shrink-0 bg-white">
@@ -66,6 +110,25 @@ export function DocumentTree({
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </button>
+            <button
+              onClick={handleCreateFolder}
+              className="p-1.5 bg-white hover:bg-purple-50 text-purple-600 rounded-md border border-purple-200 hover:border-purple-300 transition-all"
+              title="New Folder"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11v4m-2-2h4" />
+              </svg>
+            </button>
+            <button
+              onClick={handleCreateFile}
+              className="p-1.5 bg-white hover:bg-purple-50 text-purple-600 rounded-md border border-purple-200 hover:border-purple-300 transition-all"
+              title="New File"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-7v10" />
               </svg>
             </button>
             <button
@@ -136,6 +199,28 @@ export function DocumentTree({
         onConfirm={confirmRename}
         onCancel={cancelRename}
       />
+      {isCreateFolderOpen && (
+        <CreateFolderModal
+          isOpen={true}
+          initialParentPath={createFolderParentPath}
+          onClose={() => setIsCreateFolderOpen(false)}
+          onCreated={() => {
+            setIsCreateFolderOpen(false);
+            loadDocs();
+          }}
+        />
+      )}
+      {isCreateFileOpen && (
+        <CreateFileModal
+          isOpen={true}
+          initialParentPath={createFileParentPath}
+          onClose={() => setIsCreateFileOpen(false)}
+          onCreated={() => {
+            setIsCreateFileOpen(false);
+            loadDocs();
+          }}
+        />
+      )}
     </section>
   );
 }

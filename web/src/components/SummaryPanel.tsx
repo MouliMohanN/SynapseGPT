@@ -13,6 +13,7 @@ interface SummaryPanelProps {
   summaryContentRef: React.RefObject<HTMLDivElement | null>;
   handleGenerateSummary: () => void;
   stopSummaryGeneration: () => void;
+  canSummarize: boolean;
 }
 
 export function SummaryPanel({
@@ -23,6 +24,7 @@ export function SummaryPanel({
   summaryContentRef,
   handleGenerateSummary,
   stopSummaryGeneration,
+  canSummarize,
 }: SummaryPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -61,6 +63,7 @@ export function SummaryPanel({
               ) : (
                 <button
                   onClick={handleGenerateSummary}
+                  disabled={!canSummarize}
                   className="flex items-center gap-1 px-2 py-1 text-[10px] bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors"
                 >
                   <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

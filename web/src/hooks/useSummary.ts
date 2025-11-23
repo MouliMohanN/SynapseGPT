@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { buildBehavioralPrompt } from '@/lib/chat/settingsMapper';
 
-export const useSummary = (selectedDocId: string | null, settings: any) => {
+export const useSummary = (
+  selectedDocId: string | null,
+  settings: any,
+  canSummarize: boolean,
+) => {
   const [summaryContent, setSummaryContent] = useState<string>("");
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -14,7 +18,7 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
   const latestHandleRef = useRef<(() => void) | null>(null);
 
   const handleGenerateSummary = useCallback(async () => {
-    if (!selectedDocId || isGeneratingRef.current) return;
+    if (!selectedDocId || isGeneratingRef.current || !canSummarize) return;
 
     console.log("Starting summary generation for doc:", selectedDocId);
     isGeneratingRef.current = true;
@@ -93,13 +97,13 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
         }
       }
     }
-  }, [selectedDocId, settings.summaryBehavioralSettings]);
+  }, [selectedDocId, canSummarize, settings.summaryBehavioralSettings]);
 
   // Auto-generate summary when document loads
   useEffect(() => {
     pendingDocIdRef.current = selectedDocId;
 
-    if (!selectedDocId) {
+    if (!selectedDocId || !canSummarize) {
       setSummaryContent("");
       setSummaryError(null);
       if (abortControllerRef.current) {
@@ -115,7 +119,7 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
     } else {
       handleGenerateSummary();
     }
-  }, [selectedDocId, handleGenerateSummary]);
+  }, [selectedDocId, canSummarize, handleGenerateSummary]);
 
   useEffect(() => {
     latestHandleRef.current = handleGenerateSummary;

@@ -42,7 +42,7 @@ export function DocTreeNode({
 
   if (isFolder) {
     return (
-      <div>
+      <div className="relative group/folder">
         <button
           type="button"
           onClick={() => onToggleFolder(node.id)}
@@ -73,6 +73,26 @@ export function DocTreeNode({
           </svg>
           <span className="truncate text-xs font-medium text-slate-900 group-hover:text-slate-950">{node.name}</span>
         </button>
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/folder:opacity-100 transition-opacity flex gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onRename?.(node.id); }}
+            className="p-1 bg-white hover:bg-purple-50 text-purple-600 rounded border border-purple-200 shadow-sm"
+            title="Rename"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete?.(node.id); }}
+            className="p-1 bg-white hover:bg-red-50 text-red-600 rounded border border-red-200 shadow-sm"
+            title="Delete"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
         {isExpanded && node.children && (
           <div className="mt-0.5 space-y-0.5">
             {node.children.map((child) => (
