@@ -33,6 +33,7 @@ export function DocumentViewer({
 }: DocumentViewerProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const shareMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const toastTimeoutRef = React.useRef<number | null>(null);
   
@@ -130,6 +131,23 @@ export function DocumentViewer({
       document.body.style.overflow = previousOverflow;
     };
   }, [isHistoryFullScreen]);
+
+  // Close Share menu on outside click
+  React.useEffect(() => {
+    if (!isShareMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        shareMenuRef.current &&
+        !shareMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsShareMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isShareMenuOpen]);
 
   const handleSaveEdit = async (newContent: string, historyMetadata?: HistoryPatchMetadata | null) => {
     if (!docContent?.id) return;
@@ -304,7 +322,7 @@ export function DocumentViewer({
         </div>
         <div className="flex items-center gap-2">
           {docContent && !isEditing && (
-            <div className="relative">
+            <div className="relative" ref={shareMenuRef}>
               <button
                 onClick={() => setIsShareMenuOpen((prev) => !prev)}
                 className="text-xs px-2 py-0.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-md shadow-sm transition-colors flex items-center gap-1"
@@ -362,7 +380,16 @@ export function DocumentViewer({
           )}
           {docContent && !isEditing && (
             <button
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                // Exit history view when entering edit mode so the editor takes precedence
+                setShowHistory(false);
+                setSelectedVersionTimestamp(null);
+                setHistoricalContent(null);
+                setHistoricalPatch(null);
+                setHistoricalMetadata(null);
+                setIsHistoryFullScreen(false);
+                setIsEditing(true);
+              }}
               className="text-xs px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors flex items-center gap-1"
               title="Edit document"
             >
@@ -446,8 +473,14 @@ export function DocumentViewer({
       )}
 
       {docContent && showHistory && isHistoryFullScreen && selectedVersionTimestamp && (historicalContent || historicalPatch) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setIsHistoryFullScreen(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             {renderHistoryHeader('fullscreen')}
             <div className="flex-1 min-h-0 flex">
               {historyViewMode === 'patch' && historicalPatch ? (

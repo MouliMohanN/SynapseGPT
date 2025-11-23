@@ -395,8 +395,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             )}
 
       {showHistory && isHistoryFullScreen && selectedVersionTimestamp && (historicalContent || historicalPatch) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setIsHistoryFullScreen(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             {renderHistoryHeader('fullscreen')}
             <div className="flex-1 min-h-0 flex">
               {historyViewMode === 'patch' && historicalPatch ? (
@@ -600,8 +606,18 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
       {/* Pre-save review modal */}
       {showPreSaveReview && preSavePatch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[80vh] flex flex-col">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => {
+            setShowPreSaveReview(false);
+            setPreSavePatch(null);
+            setPreSaveMetadata(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
               <div>
                 <div className="text-sm font-semibold text-slate-800">Review changes before saving</div>
