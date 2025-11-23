@@ -30,6 +30,7 @@ export function CenterPane({
     summaryError,
     summaryContentRef,
     handleGenerateSummary,
+    stopSummaryGeneration,
   } = useSummary(selectedDocId, settings);
 
   // Load document function (extracted for reuse)
@@ -144,6 +145,7 @@ export function CenterPane({
             summaryError={summaryError}
             summaryContentRef={summaryContentRef}
             handleGenerateSummary={handleGenerateSummary}
+            stopSummaryGeneration={stopSummaryGeneration}
           />
 
           <DocumentViewer

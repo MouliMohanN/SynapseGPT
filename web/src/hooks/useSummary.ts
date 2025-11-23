@@ -140,5 +140,13 @@ export const useSummary = (selectedDocId: string | null, settings: any) => {
     
     // Actions
     handleGenerateSummary,
+    stopSummaryGeneration: () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setIsSummaryLoading(false);
+      isGeneratingRef.current = false;
+    },
   };
 };

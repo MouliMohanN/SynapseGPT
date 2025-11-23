@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
@@ -12,6 +12,7 @@ interface SummaryPanelProps {
   summaryError: string | null;
   summaryContentRef: React.RefObject<HTMLDivElement | null>;
   handleGenerateSummary: () => void;
+  stopSummaryGeneration: () => void;
 }
 
 export function SummaryPanel({
@@ -21,36 +22,72 @@ export function SummaryPanel({
   summaryError,
   summaryContentRef,
   handleGenerateSummary,
+  stopSummaryGeneration,
 }: SummaryPanelProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
   return (
     <div data-section="ai-summary" className="flex flex-col shrink-0 border-b border-slate-300 bg-purple-50/30">
       <div className="p-3 pb-2 flex flex-col">
         <div className="flex items-center justify-between mb-2 shrink-0">
-          <h2 className="text-sm font-semibold text-slate-800">✨ AI Summary</h2>
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 hover:text-purple-700 transition-colors"
+          >
+            {isExpanded ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            )}
+            ✨ AI Summary
+          </button>
+          
           {selectedDocId && (
-            <button
-              onClick={handleGenerateSummary}
-              disabled={isSummaryLoading}
-              className="px-2 py-1 text-[10px] bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 disabled:text-slate-500 text-white rounded-md shadow-sm transition-colors"
-            >
-              {isSummaryLoading ? "Generating..." : "Regenerate"}
-            </button>
+            <div className="flex items-center gap-2">
+              {isSummaryLoading ? (
+                <button
+                  onClick={stopSummaryGeneration}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-md shadow-sm transition-colors"
+                >
+                  <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="4" y="4" width="16" height="16" />
+                  </svg>
+                  Stop
+                </button>
+              ) : (
+                <button
+                  onClick={handleGenerateSummary}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Regenerate
+                </button>
+              )}
+            </div>
           )}
         </div>
         
-        {!selectedDocId && (
-          <p className="text-xs text-slate-600">Select a document to see its summary.</p>
-        )}
-        
-        {selectedDocId && summaryError && (
-          <div className="text-xs text-red-600">
-            Error: {summaryError}
-          </div>
-        )}
-        
-        {selectedDocId && summaryContent && (
-          <ErrorBoundary>
-            <div ref={summaryContentRef}>
+        {isExpanded && (
+          <>
+            {!selectedDocId && (
+              <p className="text-xs text-slate-600 pl-5">Select a document to see its summary.</p>
+            )}
+            
+            {selectedDocId && summaryError && (
+              <div className="text-xs text-red-600 pl-5">
+                Error: {summaryError}
+              </div>
+            )}
+            
+            {selectedDocId && summaryContent && (
+              <ErrorBoundary>
+                <div ref={summaryContentRef} className="pl-1">
               <div className="prose prose-slate prose-xs max-w-none text-xs
                 prose-p:my-3 prose-p:leading-relaxed prose-p:text-slate-900
                 prose-ul:my-3 prose-ul:pl-5 prose-ul:space-y-1
@@ -98,7 +135,9 @@ export function SummaryPanel({
           </ErrorBoundary>
         )}
         
-        {selectedDocId && isSummaryLoading && !summaryContent && <SummarySkeleton />}
+            {selectedDocId && isSummaryLoading && !summaryContent && <SummarySkeleton />}
+          </>
+        )}
       </div>
     </div>
   );
