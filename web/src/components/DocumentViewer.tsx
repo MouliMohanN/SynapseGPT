@@ -47,6 +47,8 @@ export function DocumentViewer({
   const [patchFilter, setPatchFilter] = useState<'all' | 'high' | 'low'>('all');
   const [historyViewMode, setHistoryViewMode] = useState<'diff' | 'patch'>('diff');
   const [isHistoryFullScreen, setIsHistoryFullScreen] = useState(false);
+  const [showCopyLinkModal, setShowCopyLinkModal] = useState(false);
+  const [linkToCopy, setLinkToCopy] = useState('');
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
     if (toastTimeoutRef.current !== null) {
@@ -159,8 +161,7 @@ export function DocumentViewer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           content: newContent, 
-          historyMetadata: historyMetadata ?? null,
-          historySummaryModel: settings.historySummaryModel 
+          historyMetadata: historyMetadata ?? null
         }),
       });
       
@@ -196,11 +197,13 @@ export function DocumentViewer({
           },
           (err) => {
             console.error(`Failed to copy ${label.toLowerCase()} link:`, err);
-            window.prompt(`Copy this ${label.toLowerCase()} link:`, urlToCopy);
+            setLinkToCopy(urlToCopy);
+            setShowCopyLinkModal(true);
           },
         );
       } else {
-        window.prompt(`Copy this ${label.toLowerCase()} link:`, urlToCopy);
+        setLinkToCopy(urlToCopy);
+        setShowCopyLinkModal(true);
       }
     } catch (error) {
       console.error("Failed to build share URL:", error);
@@ -507,6 +510,37 @@ export function DocumentViewer({
                   {historyViewMode === 'patch' ? 'No patch available for this version' : 'Unable to load diff for this version'}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Copy Link Modal */}
+      {showCopyLinkModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setShowCopyLinkModal(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">Copy Link</h3>
+            <p className="text-sm text-slate-600 mb-4">Copy this link manually:</p>
+            <input
+              type="text"
+              value={linkToCopy}
+              readOnly
+              className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2 text-sm text-slate-900 mb-4"
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowCopyLinkModal(false)}
+                className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded shadow-sm transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

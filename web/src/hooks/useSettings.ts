@@ -2,7 +2,6 @@ import { useState } from 'react';
 
 const defaultSettings = {
   aiModel: "gpt-oss:20b",
-  historySummaryModel: "qwen2.5-coder:1.5b",
   defaultLeftWidth: 20,
   defaultRightWidth: 25,
   allowOutsideDocumentAnswers: false,

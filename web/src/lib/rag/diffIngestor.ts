@@ -12,7 +12,7 @@ dotenv.config({ path: ".env.local" });
 const HISTORY_COLLECTION_NAME = process.env.HISTORY_COLLECTION_NAME || "synapse-gpt-history";
 const CHROMA_URL = process.env.CHROMA_DB_URL || "http://localhost:8000";
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const SUMMARY_MODEL = process.env.HISTORY_SUMMARY_MODEL || "qwen2.5-coder:1.5b";
+const SUMMARY_MODEL = process.env.HISTORY_SUMMARY_MODEL || "gpt-oss:20b";
 
 // Initialize Embeddings
 const embeddings = new OllamaEmbeddings({
@@ -70,35 +70,56 @@ function invertPatch(patchContent: string): string {
 /**
  * Summarizes a patch using a local LLM or heuristics.
  */
-async function summarizePatch(patchContent: string, priority: string, model?: string): Promise<string> {
+async function summarizePatch(patchContent: string, priority: string): Promise<string> {
   // Invert patch to make it "Forward" (Old -> New) so "Additions" look like Additions.
   const forwardPatch = invertPatch(patchContent);
 
   // LLM Summary for all patches
   try {
     const behavior: BehavioralSettings = {
-      detailLevel: "overview",
+      detailLevel: "detailed",
       tone: "professional",
       generateQuestions: 0
     };
     
     const behavioralPrompt = buildBehavioralPrompt(behavior);
 
-    const prompt = `You are a helpful coding assistant. Summarize the following git patch in ONE concise sentence. Focus on the intent of the change.
+    const prompt = `You are a document analysis assistant. Analyze this change/diff and create a SPECIFIC, DETAILED summary of what was modified.
+
+IMPORTANT RULES:
+- Be SPECIFIC about what content was added, modified, or removed
+- Include actual names, titles, sections, or key terms that changed
+- Mention the PURPOSE or IMPACT of the change when clear from context
+- Keep it to 1-2 sentences but make them MEANINGFUL
+- Avoid generic phrases like "updated content" or "made changes"
+- Adapt your language to the document type (technical, business, creative, etc.)
+
+GOOD examples:
+- "Added authentication middleware with JWT token validation" (technical)
+- "Updated Q3 revenue projections from $2M to $2.5M in financial summary" (business)
+- "Added new character backstory for protagonist in Chapter 3" (creative)
+- "Expanded troubleshooting section with 3 new common error scenarios" (documentation)
+
+BAD examples:
+- "A section was added"
+- "Fixed a typo"
+- "Updated the document"
+
 ${behavioralPrompt}
 
 Patch:
-${forwardPatch.slice(0, 2000)} ${forwardPatch.length > 2000 ? "...(truncated)" : ""}
+${forwardPatch}
 
-Summary:`;
+Specific summary:`;
 
     let summary = "";
     const stream = streamOllamaCompletion({
       prompt,
       modelConfig: {
-        model: model || SUMMARY_MODEL,
-        temperature: 0.1,
-        maxTokens: 60,
+        model: SUMMARY_MODEL,
+        temperature: 0.5,
+        maxTokens: 131000,
+        topP: 0.85,
       }
     });
 
@@ -142,8 +163,7 @@ function getDiffStats(patchContent: string) {
 export async function ingestHistoryVersion(
   docId: string, 
   timestamp: string, 
-  priority: "high" | "low" = "low",
-  model?: string
+  priority: "high" | "low" = "low"
 ) {
   try {
     const patchContent = await getPatch(docId, timestamp);
@@ -153,13 +173,17 @@ export async function ingestHistoryVersion(
     }
 
     // 1. Generate Summary
-    const summary = await summarizePatch(patchContent, priority, model);
+    const summary = await summarizePatch(patchContent, priority);
     const stats = getDiffStats(patchContent);
 
     // 2. Prepare Document
     const eventId = generateEventId(docId, timestamp);
+    
+    // Include actual patch content (truncated for embedding efficiency)
+    const truncatedPatch = patchContent.slice(0, 1000);
+    
     const document = {
-      pageContent: `Change in ${docId} at ${timestamp}: ${summary}\n\nDiff Stats: +${stats.additions} -${stats.deletions}`,
+      pageContent: `Change in ${docId} at ${timestamp}: ${summary}\n\nDiff Stats: +${stats.additions} -${stats.deletions}\n\nPatch:\n${truncatedPatch}${patchContent.length > 1000 ? '\n...(truncated)' : ''}`,
       metadata: {
         id: eventId,
         docId,

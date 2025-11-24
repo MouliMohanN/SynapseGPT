@@ -18,10 +18,13 @@ const embeddings = new OllamaEmbeddings({
   baseUrl: OLLAMA_URL,
 });
 
-// Initialize Splitter
-const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 1000,
-  chunkOverlap: 200,
+// Initialize Markdown-Aware Splitter
+// This splitter respects markdown structure and keeps headings with their content
+const splitter = RecursiveCharacterTextSplitter.fromLanguage("markdown", {
+  chunkSize: 3000,        // Larger chunks to keep sections together
+  chunkOverlap: 800,      // Large overlap ensures H1 titles are included with first section
+  // Markdown splits on: \n##, \n###, \n\n, \n, " " in that order
+  // This ensures headings stay with their content
 });
 
 let vectorStorePromise: Promise<Chroma> | null = null;

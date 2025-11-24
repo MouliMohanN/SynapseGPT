@@ -7,7 +7,6 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: {
     aiModel: string;
-    historySummaryModel: string;
     defaultLeftWidth: number;
     defaultRightWidth: number;
     allowOutsideDocumentAnswers: boolean;
@@ -156,19 +155,6 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
             <>
               <div className="text-sm font-medium text-slate-900 mb-3">History Settings</div>
               
-              <div className="mb-4">
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  History Summary Model
-                </label>
-                <input
-                  type="text"
-                  value={localSettings.historySummaryModel || "qwen2.5-coder:1.5b"}
-                  onChange={(e) => setLocalSettings({ ...localSettings, historySummaryModel: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                />
-                <p className="text-[10px] text-slate-600 mt-1">Model used for summarizing history patches (e.g., qwen2.5-coder:1.5b)</p>
-              </div>
-
               <div className="mb-4 px-3 py-2 border border-slate-200 rounded-lg bg-slate-50">
                    <label className="block text-xs font-medium text-slate-700 mb-2">History Retrieval Limit</label>
                    <div className="flex gap-2">

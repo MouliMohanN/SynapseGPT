@@ -334,7 +334,7 @@ export async function PUT(
     const { docId: rawDocId } = await params;
     const docId = decodeURIComponent(rawDocId);
     const sanitizedDocId = sanitizeDocId(docId);
-    const { content, historyMetadata, historySummaryModel } = await request.json();
+    const { content, historyMetadata } = await request.json();
 
     if (typeof content !== "string") {
       return NextResponse.json(
@@ -377,7 +377,7 @@ export async function PUT(
          }
 
          // Ingest history version (awaiting to ensure it completes, can be made async if too slow)
-         await ingestHistoryVersion(sanitizedDocId, timestamp, priority, historySummaryModel);
+         await ingestHistoryVersion(sanitizedDocId, timestamp, priority);
        }
     }
     

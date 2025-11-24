@@ -134,7 +134,7 @@ async function buildRetrievalContext(message: string, historyRetrievalLimit?: nu
     return "";
   }
 
-  const retrievedChunks = await retrieveRelevantChunks(message, 4);
+  const retrievedChunks = await retrieveRelevantChunks(message, 8);
 
   // History Retrieval
   let historyContext = "";
@@ -145,8 +145,8 @@ async function buildRetrievalContext(message: string, historyRetrievalLimit?: nu
   
   if (historyRetrievalLimit !== undefined) {
     if (historyRetrievalLimit === 0) limit = 0;
+    else if (historyRetrievalLimit === -1) limit = 1000; // Auto: retrieve all
     else if (historyRetrievalLimit > 0) limit = historyRetrievalLimit;
-    // if -1, keep envLimit
   }
 
   // Only proceed if limit > 0 and intent detected
@@ -154,8 +154,21 @@ async function buildRetrievalContext(message: string, historyRetrievalLimit?: nu
     const historyChunks = await retrieveHistory(message, { limit });
       if (historyChunks.length > 0) {
         historyContext = "\n\n[DOCUMENT HISTORY / CHANGES]\n" + historyChunks
-          .map(chunk => `Date: ${chunk.metadata.timestamp} (${chunk.metadata.priority})\nSummary: ${chunk.metadata.summary}\nStats: ${chunk.metadata.additions} additions, ${chunk.metadata.deletions} deletions`)
-          .join("\n---\n");
+          .map(chunk => {
+            const parts = [
+              `Date: ${chunk.metadata.timestamp} (Priority: ${chunk.metadata.priority})`,
+              `Summary: ${chunk.metadata.summary}`,
+              `Stats: +${chunk.metadata.additions} additions, -${chunk.metadata.deletions} deletions`
+            ];
+            
+            // Include the actual patch content for context
+            if (chunk.content) {
+              parts.push(`Changes:\n${chunk.content.slice(0, 500)}${chunk.content.length > 500 ? '...(truncated)' : ''}`);
+            }
+            
+            return parts.join('\n');
+          })
+          .join("\n\n---\n\n");
       }
     }
 

@@ -6,7 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "rag:ingest": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/ingest.ts",
+    "rag:rebuild-docs": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/rebuild-docs-db.ts",
+    "rag:rebuild-history": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/rebuild-history-db.ts",
+    "db:inspect": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/inspect-chroma-db.ts",
+    "db:clear": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/clear-chroma-db.ts",
+    "test:ollama": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/test-ollama-connection.ts",
+    "test:rag-docs": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/test-retrieval.ts",
+    "test:rag-history": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/test-comprehensive-history.ts"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",

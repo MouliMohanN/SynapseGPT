@@ -77,7 +77,7 @@ export async function retrieveHistory(
   query: string,
   options: HistoryRetrievalOptions = {}
 ): Promise<RetrievedChunk[]> {
-  const k = options.limit || 5;
+  const k = options.limit !== undefined ? options.limit : 5;
   
   try {
     // Build filter

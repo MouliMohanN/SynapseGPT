@@ -157,11 +157,16 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
     }
   };
 
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   const handleClearConversation = () => {
-    if (confirm("Clear all chat messages?")) {
-      setChatMessages([]);
-      localStorage.removeItem(CHAT_STORAGE_KEY);
-    }
+    setShowClearConfirm(true);
+  };
+
+  const confirmClearConversation = () => {
+    setChatMessages([]);
+    localStorage.removeItem(CHAT_STORAGE_KEY);
+    setShowClearConfirm(false);
   };
 
   const handleRegenerateResponse = async () => {
@@ -199,6 +204,7 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
     chatMessages,
     isStreaming,
     streamingCharCount,
+    showClearConfirm,
     
     // Refs
     chatEndRef,
@@ -209,6 +215,8 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
     handleSend,
     handleStopGeneration,
     handleClearConversation,
+    confirmClearConversation,
+    setShowClearConfirm,
     handleRegenerateResponse,
     handleKeyDown,
     handleScroll,
