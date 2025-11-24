@@ -163,10 +163,25 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
     setShowClearConfirm(true);
   };
 
-  const confirmClearConversation = () => {
+  const confirmClearConversation = async () => {
+    // Clear client-side state
     setChatMessages([]);
     localStorage.removeItem(CHAT_STORAGE_KEY);
     setShowClearConfirm(false);
+
+    // Clear server-side conversation history
+    try {
+      await fetch("/api/chat/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: DEFAULT_CONVERSATION_ID,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to clear server-side conversation:", error);
+      // Continue anyway - client is already cleared
+    }
   };
 
   const handleRegenerateResponse = async () => {

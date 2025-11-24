@@ -37,3 +37,7 @@ export function updateConversationHistory(
 export function hasConversation(conversationId: string): boolean {
   return conversations.has(conversationId);
 }
+
+export function clearConversationHistory(conversationId: string): void {
+  conversations.delete(conversationId);
+}
