@@ -153,7 +153,7 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
           {/* Tab-specific settings */}
           {activeTab === "chat" && (
             <>
-              <div className="text-sm font-medium text-slate-900 mb-3">History Settings</div>
+              {/* <div className="text-sm font-medium text-slate-900 mb-3">History Settings</div>
               
               <div className="mb-4 px-3 py-2 border border-slate-200 rounded-lg bg-slate-50">
                    <label className="block text-xs font-medium text-slate-700 mb-2">History Retrieval Limit</label>
@@ -192,7 +192,7 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
                         <div className="text-[9px] opacity-75 mt-0.5">Fixed count</div>
                       </button>
                    </div>
-                </div>
+                </div> */}
 
               <div className="text-sm font-medium text-slate-900 mb-3 mt-6">General Chat Settings</div>
 

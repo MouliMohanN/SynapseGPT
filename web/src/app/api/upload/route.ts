@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         }
 
         // Ingest the file (either original .md/.txt or converted .md)
-        await ingestFile(fileToIngest, docsRoot);
+        ingestFile(fileToIngest, docsRoot);
         successCount++;
       } catch (err) {
         console.error(`Failed to process file ${file.name}:`, err);
