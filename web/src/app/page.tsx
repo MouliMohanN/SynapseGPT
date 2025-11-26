@@ -10,7 +10,13 @@ import { AboutModal } from "@/components/AboutModal";
 import { useSettings } from "@/hooks/useSettings";
 import { HeaderBar } from "@/components/HeaderBar";
 import { UploadModal } from "@/components/UploadModal";
-import { Toast } from "@/components/Toast";
+type DocEventUI = {
+  docId: string;
+  type: string;
+  message: string;
+  timestamp: string;
+  meta?: any;
+};
 
 export default function HomePage() {
   // Settings
@@ -29,8 +35,58 @@ export default function HomePage() {
   const [isDraggingRight, setIsDraggingRight] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const toastTimeoutRef = React.useRef<number | null>(null);
+  const [eventLog, setEventLog] = useState<DocEventUI[]>([]);
+  const eventLogTimeoutRef = React.useRef<number | null>(null);
+  const [isActivityHovered, setIsActivityHovered] = useState(false);
+
+  const scheduleAutoClear = useCallback(() => {
+    if (eventLogTimeoutRef.current !== null) {
+      window.clearTimeout(eventLogTimeoutRef.current);
+    }
+    eventLogTimeoutRef.current = window.setTimeout(() => {
+      setEventLog([]);
+      eventLogTimeoutRef.current = null;
+    }, 5000);
+  }, []);
+
+  const addEventToLog = useCallback(
+    (data: DocEventUI) => {
+      setEventLog((prev) => {
+        const next = [data, ...prev];
+        return next.slice(0, 20);
+      });
+
+      // Do not auto-clear while the user is hovering over the panel.
+      if (!isActivityHovered) {
+        scheduleAutoClear();
+      }
+    },
+    [isActivityHovered, scheduleAutoClear],
+  );
+
+  const pushActivity = useCallback(
+    (partial: { type: string; message: string; docId?: string; meta?: any }) => {
+      const evt: DocEventUI = {
+        docId: partial.docId ?? selectedDocId ?? "__ui__",
+        type: partial.type,
+        message: partial.message,
+        timestamp: new Date().toISOString(),
+        meta: partial.meta,
+      };
+      addEventToLog(evt);
+    },
+    [addEventToLog, selectedDocId],
+  );
+
+  const handleNotify = useCallback(
+    (message: string, type: "success" | "error" = "success") => {
+      pushActivity({
+        type: type === "error" ? "ui:error" : "ui:info",
+        message,
+      });
+    },
+    [pushActivity],
+  );
 
   // Initialize panel widths from settings
   useEffect(() => {
@@ -45,23 +101,12 @@ export default function HomePage() {
     }
   }, [searchParams, selectedDocId]);
 
-  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
-    if (toastTimeoutRef.current !== null) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
-    setToast({ message, type });
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToast(null);
-      toastTimeoutRef.current = null;
-    }, 3000);
-  }, []);
-
-  const handleSaveSettingsWithToast = useCallback(
+  const handleSaveSettingsWithActivity = useCallback(
     (next: typeof settings) => {
       handleSaveSettings(next);
-      showToast("Settings updated", "success");
+      pushActivity({ type: "ui:settings", message: "Settings updated" });
     },
-    [handleSaveSettings, showToast],
+    [handleSaveSettings, pushActivity],
   );
 
   const handleSelectDoc = useCallback(
@@ -118,6 +163,40 @@ export default function HomePage() {
     }
   }, [isDraggingRight, handleMouseMoveRight, handleMouseUp]);
 
+  useEffect(() => {
+    if (!selectedDocId) return;
+
+    const encodedId = encodeURIComponent(selectedDocId);
+    const source = new EventSource(`/api/docs/${encodedId}/events`);
+
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as DocEventUI;
+
+        if (data.type === "sse:connected") {
+          return;
+        }
+
+        addEventToLog(data);
+      } catch (error) {
+        console.error("Failed to handle SSE message:", error, event.data);
+      }
+    };
+
+    source.onerror = (error) => {
+      console.error("SSE connection error:", error);
+      source.close();
+    };
+
+    return () => {
+      if (eventLogTimeoutRef.current !== null) {
+        window.clearTimeout(eventLogTimeoutRef.current);
+        eventLogTimeoutRef.current = null;
+      }
+      source.close();
+    };
+  }, [selectedDocId, addEventToLog]);
+
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden">
       {/* Header with branding */}
@@ -131,6 +210,7 @@ export default function HomePage() {
           onSettingsClick={() => setShowSettings(true)}
           onUploadClick={() => setShowUpload(true)}
           refreshTrigger={docsRefreshTrigger}
+          onNotify={handleNotify}
         />
 
         {/* Resize handle for left panel */}
@@ -143,6 +223,7 @@ export default function HomePage() {
         <CenterPane
           selectedDocId={selectedDocId}
           settings={settings}
+          onNotify={handleNotify}
         />
 
         {/* Resize handle for right panel */}
@@ -165,7 +246,7 @@ export default function HomePage() {
         <SettingsModal
           isOpen={showSettings}
           settings={settings}
-          onSave={handleSaveSettingsWithToast}
+          onSave={handleSaveSettingsWithActivity}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -180,10 +261,79 @@ export default function HomePage() {
         onClose={() => setShowUpload(false)} 
         onUploadComplete={() => {
           setDocsRefreshTrigger(v => v + 1);
-          showToast("Upload complete", "success");
         }}
       />
-      {toast && <Toast message={toast.message} type={toast.type} />}
+      {eventLog.length > 0 && (
+        <div
+          className="fixed top-4 right-4 z-40 w-80 max-h-64 overflow-y-auto bg-white/95 border border-slate-200 rounded-lg shadow-lg text-xs backdrop-blur-sm"
+          onMouseEnter={() => {
+            setIsActivityHovered(true);
+            if (eventLogTimeoutRef.current !== null) {
+              window.clearTimeout(eventLogTimeoutRef.current);
+              eventLogTimeoutRef.current = null;
+            }
+          }}
+          onMouseLeave={() => {
+            setIsActivityHovered(false);
+            if (eventLog.length > 0) {
+              scheduleAutoClear();
+            }
+          }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-purple-50">
+            <span className="text-[11px] font-semibold text-slate-800">Document Activity</span>
+            <button
+              type="button"
+              onClick={() => {
+                setEventLog([]);
+                if (eventLogTimeoutRef.current !== null) {
+                  window.clearTimeout(eventLogTimeoutRef.current);
+                  eventLogTimeoutRef.current = null;
+                }
+              }}
+              className="text-[10px] text-purple-500 hover:text-purple-700"
+            >
+              Clear
+            </button>
+          </div>
+          <ul
+            className="max-h-52 overflow-y-auto divide-y divide-slate-100"
+            onScroll={() => {
+              if (eventLogTimeoutRef.current !== null) {
+                window.clearTimeout(eventLogTimeoutRef.current);
+                eventLogTimeoutRef.current = null;
+              }
+            }}
+          >
+            {eventLog.map((evt, idx) => {
+              const isError = evt.type.endsWith(":error");
+              const isStart = evt.type.endsWith(":start");
+              const isComplete = evt.type.endsWith(":complete");
+              const badgeColor = isError
+                ? "bg-red-50 text-red-700 border-red-200"
+                : isComplete
+                ? "bg-green-50 text-green-700 border-green-200"
+                : isStart
+                ? "bg-blue-50 text-blue-700 border-blue-200"
+                : "bg-purple-50 text-purple-700 border-purple-200";
+
+              const time = new Date(evt.timestamp).toLocaleTimeString();
+
+              return (
+                <li key={`${evt.timestamp}-${idx}`} className="px-3 py-2 flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`px-1.5 py-0.5 rounded-full border text-[10px] font-medium ${badgeColor}`}>
+                      {evt.type}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{time}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-700 break-words">{evt.message}</div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

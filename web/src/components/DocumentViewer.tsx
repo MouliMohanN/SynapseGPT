@@ -8,7 +8,6 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 import { HistorySidebar } from './History/HistorySidebar';
 import { DiffViewer } from './History/DiffViewer';
 import { PatchViewer } from './History/PatchViewer';
-import { Toast } from './Toast';
 
 interface DocumentViewerProps {
   docContent: DocumentContent | null;
@@ -19,6 +18,7 @@ interface DocumentViewerProps {
   setShowSections: (show: boolean) => void;
   onDocumentUpdate?: () => void;
   settings: any;
+  onNotify?: (message: string, type: "success" | "error") => void;
 }
 
 export function DocumentViewer({
@@ -30,12 +30,11 @@ export function DocumentViewer({
   setShowSections,
   onDocumentUpdate,
   settings,
+  onNotify,
 }: DocumentViewerProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
   const shareMenuRef = React.useRef<HTMLDivElement | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const toastTimeoutRef = React.useRef<number | null>(null);
   
   // History State
   const [showHistory, setShowHistory] = useState(false);
@@ -49,17 +48,6 @@ export function DocumentViewer({
   const [isHistoryFullScreen, setIsHistoryFullScreen] = useState(false);
   const [showCopyLinkModal, setShowCopyLinkModal] = useState(false);
   const [linkToCopy, setLinkToCopy] = useState('');
-
-  const showToast = (message: string, type: "success" | "error" = "success") => {
-    if (toastTimeoutRef.current !== null) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
-    setToast({ message, type });
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToast(null);
-      toastTimeoutRef.current = null;
-    }, 3000);
-  };
 
   const fetchHistory = async () => {
     if (!docContent?.id) return;
@@ -171,10 +159,10 @@ export function DocumentViewer({
       
       onDocumentUpdate?.();
       setIsEditing(false);
-      showToast("Document saved", "success");
+      onNotify?.("Document saved", "success");
     } catch (err) {
       console.error("Failed to save:", err);
-      showToast("Failed to save document", "error");
+      onNotify?.("Failed to save document", "error");
     }
   };
 
@@ -193,7 +181,7 @@ export function DocumentViewer({
         navigator.clipboard.writeText(urlToCopy).then(
           () => {
             console.info(`${label} share link: ${urlToCopy}`);
-            showToast(urlToCopy, "success");
+            onNotify?.(urlToCopy, "success");
           },
           (err) => {
             console.error(`Failed to copy ${label.toLowerCase()} link:`, err);
@@ -546,7 +534,6 @@ export function DocumentViewer({
         </div>
       )}
 
-      {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
   );
 }

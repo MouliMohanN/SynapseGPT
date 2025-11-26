@@ -108,8 +108,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
       return;
     }
 
-    setStatus("uploading");
-    setMessage(`Uploading and ingesting ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}...`);
+    // Close modal immediately; upload continues in the background and
+    // progress/errors are surfaced via the global activity panel.
+    onClose();
 
     const formData = new FormData();
     // Append target path (sanitize leading/trailing slashes if needed, but backend should handle it)
@@ -138,25 +139,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setStatus("success");
-        setMessage(`Successfully uploaded ${data.count} files!`);
         if (onUploadComplete) {
           onUploadComplete();
         }
-        setTimeout(() => {
-          onClose();
-          setStatus("idle");
-          setMessage("");
-          setTargetPath("");
-        }, 2000);
       } else {
-        setStatus("error");
-        setMessage(data.error || "Upload failed.");
+        console.error("Upload failed:", data.error || data);
       }
     } catch (err) {
       console.error("Network error during upload:", err);
-      setStatus("error");
-      setMessage("Network error occurred.");
     }
   };
 
