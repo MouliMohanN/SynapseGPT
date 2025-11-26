@@ -6,7 +6,7 @@ SynapseGPT is a **local-first**, privacy-focused AI chat application designed to
 
 ## 🚀 Key Features
 
-- **🔒 100% Local**: Powered by [Ollama](https://ollama.com/), running open-source models like Llama 3 or Mistral locally.
+- **🔒 100% Local**: Powered by [Ollama](https://ollama.com/), running open-source models like Qwen 2.5, GPT-OSS, Llama 3, or Mistral locally.
 - **🔎 Semantic Search**: Uses **ChromaDB** (Vector Database) to understand the *meaning* of your queries, not just keyword matching.
 - **📚 Smart Citations**: Every answer includes precise citations pointing back to the source document.
 - **⚡ Real-time Streaming**: Fast, streaming responses for a fluid chat experience.
@@ -18,7 +18,12 @@ SynapseGPT is a **local-first**, privacy-focused AI chat application designed to
 - **📄 Multi-Format Support**: Upload and process PDF, Word, PowerPoint, Excel, HTML, images, and Markdown files.
 - **🤖 AI-Powered Conversion**: Uses [Docling](https://github.com/docling-project/docling) to convert documents to high-quality Markdown with preserved structure.
 - **📤 Drag-and-Drop Upload**: Easy file and folder uploads with automatic conversion and ingestion.
- - **📡 Live Document Activity**: Top-right activity panel streaming upload, conversion, indexing, delete, and history events via Redis + SSE.
+- **📊 AI Summary Panel**: Collapsible, streaming document summaries with configurable behavior (detail level, tone, question generation).
+- **🔄 Document History & Version Control**: Full version tracking with diff/patch viewing, side-by-side comparisons, and timeline browsing.
+- **🔗 Document Sharing**: Copy internal and external shareable links to specific documents.
+- **⚙️ Granular AI Configuration**: Separate behavioral settings for Chat, Summary, Autocomplete, and QA Agent.
+- **🤖 Automated QA Agent**: One-click generation of comprehensive test plans from your PRDs, with background processing and real-time status updates.
+- **📡 Live Document Activity**: Top-right activity panel streaming upload, conversion, indexing, delete, and history events via Redis + SSE.
 
 ---
 
@@ -176,6 +181,8 @@ Behavior:
 - `history:start` / `history:complete` / `history:error` – History or diff computations.
 - `ui:info` / `ui:error` / `ui:settings` – Client-side notifications such as editor actions or settings updates.
 
+> **Note**: Background tasks (like indexing a generated test plan) now emit events to both the new file and the source PRD, ensuring you never miss a status update even if you switch documents.
+
 These events are purely local and flow through Redis on your machine, keeping your workflow observable without leaking data off-device.
 
 ---
@@ -197,6 +204,120 @@ The built-in document editor offers a powerful writing experience:
 ### Zen Mode
 - Click the **Full Screen** icon (arrows) in the toolbar to enter a distraction-free writing mode.
 - Press `Esc` or click "Exit Full Screen" to return.
+
+---
+
+---
+
+## 📊 AI Summary
+
+SynapseGPT includes an intelligent summary panel that provides quick overviews of your documents:
+
+### Features
+- **Collapsible Panel**: Appears above the document viewer, can be expanded/collapsed
+- **Streaming Generation**: Watch the summary being generated in real-time
+- **Regenerate**: Click to generate a fresh summary anytime
+- **Stop Generation**: Cancel summary generation mid-stream if needed
+
+### Behavioral Configuration
+Customize how summaries are generated in Settings → AI Summary Settings:
+
+- **Detail Level**:
+  - **Overview**: High-level summary
+  - **Detailed**: Summary with examples
+  - **Comprehensive**: Exhaustive analysis
+
+- **Tone**:
+  - **Professional**: Formal language
+  - **Casual**: Conversational style
+  - **Tutorial**: Educational approach
+
+- **Question Generation**:
+  - **None**: No follow-up questions
+  - **Auto**: AI decides based on content
+  - **Fixed Count**: Generate specific number of questions (e.g., 5)
+
+---
+
+## 🔄 Document History & Version Control
+
+Every document edit is automatically tracked with full version history:
+
+### Accessing History
+1. Open any document in the viewer
+2. Click the **"History"** button in the toolbar
+3. Browse versions in the sidebar
+
+### Features
+- **Timeline View**: See all saved versions with timestamps
+- **Diff Viewer**: Side-by-side comparison of any version vs current
+- **Patch Viewer**: View exact changes as patch files
+- **Filtering**: Show all changes, or filter by high/low priority
+- **Full-Screen Mode**: Expand diff/patch view for detailed analysis
+- **Reverse Deltas**: Efficient storage using incremental patches
+
+### How It Works
+- Every save creates a `.patch` file in `.history/`
+- Patches are stored as reverse deltas (from new → old)
+- Any version can be reconstructed by applying patches in sequence
+- History is automatically indexed for RAG search
+
+---
+
+## 📁 Document Management
+
+### Creating Documents
+- **New File**: Click the "+" icon in the document tree → "New File"
+- **New Folder**: Click the "+" icon → "New Folder"
+- **Drag & Drop**: Drop files or folders directly into the browser
+
+### Organizing Documents
+- **Rename**: Right-click any document/folder → "Rename"
+- **Delete**: Right-click → "Delete" (with confirmation)
+- **Move**: Drag and drop to reorganize (coming soon)
+
+### Sharing Documents
+Click the **Share** button (🔗) in the document viewer toolbar:
+- **Copy full browser URL**: Share with external users (includes domain)
+- **Copy in-app URL**: Share with team members (relative path with `?doc=` parameter)
+
+---
+
+## ⚙️ Advanced Configuration
+
+### Behavioral Settings
+
+SynapseGPT allows you to customize AI behavior for different use cases. Access via **Settings** (gear icon):
+
+#### Chat Settings
+Configure how the AI responds in the chat panel:
+- **Detail Level**: Overview, Detailed, or Comprehensive
+- **Tone**: Professional, Casual, or Tutorial
+- **Question Generation**: None, Auto, or Fixed count
+- **Allow Outside Document Answers**: Enable/disable responses when context isn't in docs
+
+#### AI Summary Settings
+Separate configuration for document summaries (same options as Chat)
+
+#### Editor Autocomplete Settings
+- **Enable/Disable**: Toggle ghost text suggestions
+- **Model**: Recommended `qwen2.5-coder:1.5b`
+- **Debounce Delay**: Wait time before fetching suggestions (100-2000ms)
+- **Temperature**: Creativity level (0-1)
+- **Top P**: Word choice diversity (0-1)
+- **Max Tokens**: Maximum suggestion length
+- **Repeat Penalty**: Prevent repetitive text (1.0-2.0)
+
+---
+
+## 🤖 QA Agent & Test Generation
+
+SynapseGPT includes a specialized agent for Quality Assurance:
+
+1.  **One-Click Generation**: Open any PRD (Markdown file) and click the **"🤖 Generate Tests"** button in the toolbar.
+2.  **Automated Workflow**: The agent analyzes requirements, generates positive/negative/edge cases, reviews its own plan, and saves it as a new file (e.g., `login_test_cases.md`).
+3.  **Background Processing**: Heavy tasks like history saving and vector ingestion happen in the background, keeping the UI responsive.
+4.  **Real-time Feedback**: Watch the agent's progress (thoughts, steps) in a dedicated, resizable panel. You'll also receive notifications for background indexing tasks even if you switch files.
 
 ---
 
