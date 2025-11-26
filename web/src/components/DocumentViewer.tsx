@@ -8,7 +8,6 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 import { HistorySidebar } from './History/HistorySidebar';
 import { DiffViewer } from './History/DiffViewer';
 import { PatchViewer } from './History/PatchViewer';
-import { Toast } from './Toast';
 
 interface DocumentViewerProps {
   docContent: DocumentContent | null;
@@ -19,6 +18,7 @@ interface DocumentViewerProps {
   setShowSections: (show: boolean) => void;
   onDocumentUpdate?: () => void;
   settings: any;
+  onNotify?: (message: string, type: "success" | "error") => void;
 }
 
 export function DocumentViewer({
@@ -30,12 +30,11 @@ export function DocumentViewer({
   setShowSections,
   onDocumentUpdate,
   settings,
+  onNotify,
 }: DocumentViewerProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
   const shareMenuRef = React.useRef<HTMLDivElement | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const toastTimeoutRef = React.useRef<number | null>(null);
   
   // History State
   const [showHistory, setShowHistory] = useState(false);
@@ -47,17 +46,8 @@ export function DocumentViewer({
   const [patchFilter, setPatchFilter] = useState<'all' | 'high' | 'low'>('all');
   const [historyViewMode, setHistoryViewMode] = useState<'diff' | 'patch'>('diff');
   const [isHistoryFullScreen, setIsHistoryFullScreen] = useState(false);
-
-  const showToast = (message: string, type: "success" | "error" = "success") => {
-    if (toastTimeoutRef.current !== null) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
-    setToast({ message, type });
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToast(null);
-      toastTimeoutRef.current = null;
-    }, 3000);
-  };
+  const [showCopyLinkModal, setShowCopyLinkModal] = useState(false);
+  const [linkToCopy, setLinkToCopy] = useState('');
 
   const fetchHistory = async () => {
     if (!docContent?.id) return;
@@ -157,7 +147,10 @@ export function DocumentViewer({
       const res = await fetch(`/api/docs/${encodedId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent, historyMetadata: historyMetadata ?? null }),
+        body: JSON.stringify({ 
+          content: newContent, 
+          historyMetadata: historyMetadata ?? null
+        }),
       });
       
       if (!res.ok) {
@@ -166,10 +159,10 @@ export function DocumentViewer({
       
       onDocumentUpdate?.();
       setIsEditing(false);
-      showToast("Document saved", "success");
+      onNotify?.("Document saved", "success");
     } catch (err) {
       console.error("Failed to save:", err);
-      showToast("Failed to save document", "error");
+      onNotify?.("Failed to save document", "error");
     }
   };
 
@@ -188,15 +181,17 @@ export function DocumentViewer({
         navigator.clipboard.writeText(urlToCopy).then(
           () => {
             console.info(`${label} share link: ${urlToCopy}`);
-            showToast(urlToCopy, "success");
+            onNotify?.(urlToCopy, "success");
           },
           (err) => {
             console.error(`Failed to copy ${label.toLowerCase()} link:`, err);
-            window.prompt(`Copy this ${label.toLowerCase()} link:`, urlToCopy);
+            setLinkToCopy(urlToCopy);
+            setShowCopyLinkModal(true);
           },
         );
       } else {
-        window.prompt(`Copy this ${label.toLowerCase()} link:`, urlToCopy);
+        setLinkToCopy(urlToCopy);
+        setShowCopyLinkModal(true);
       }
     } catch (error) {
       console.error("Failed to build share URL:", error);
@@ -508,7 +503,37 @@ export function DocumentViewer({
         </div>
       )}
 
-      {toast && <Toast message={toast.message} type={toast.type} />}
+      {/* Copy Link Modal */}
+      {showCopyLinkModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setShowCopyLinkModal(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">Copy Link</h3>
+            <p className="text-sm text-slate-600 mb-4">Copy this link manually:</p>
+            <input
+              type="text"
+              value={linkToCopy}
+              readOnly
+              className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2 text-sm text-slate-900 mb-4"
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowCopyLinkModal(false)}
+                className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded shadow-sm transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

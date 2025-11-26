@@ -5,6 +5,7 @@ const defaultSettings = {
   defaultLeftWidth: 20,
   defaultRightWidth: 25,
   allowOutsideDocumentAnswers: false,
+  historyRetrievalLimit: -1,
   chatBehavioralSettings: {
     detailLevel: "overview" as "overview" | "detailed" | "comprehensive",
     tone: "tutorial" as "professional" | "casual" | "tutorial",

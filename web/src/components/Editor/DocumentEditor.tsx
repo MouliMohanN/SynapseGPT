@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
@@ -71,6 +71,19 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [preSavePatch, setPreSavePatch] = useState<string | null>(null);
   const [preSaveMetadata, setPreSaveMetadata] = useState<HistoryPatchMetadata | null>(null);
   const [preSaveFilter, setPreSaveFilter] = useState<'all' | 'high' | 'low'>('all');
+
+  // Cancel-with-diff state
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelPatch, setCancelPatch] = useState<string | null>(null);
+
+  const ghostExtension = useMemo(
+    () =>
+      ghostTextExtension({
+        ...autocompleteSettings,
+        enabled: autocompleteEnabled,
+      }),
+    [autocompleteSettings, autocompleteEnabled],
+  );
 
   const fetchHistory = async () => {
     try {
@@ -464,10 +477,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   markdown({ base: markdownLanguage, codeLanguages: languages }),
                   EditorView.lineWrapping,
                   editorTheme,
-                  ghostTextExtension({
-                    ...autocompleteSettings,
-                    enabled: autocompleteEnabled,
-                  }),
+                  ghostExtension,
                 ]}
                 onChange={(val) => setContent(val)}
                 className="h-full text-sm"
@@ -560,7 +570,15 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       {!isFullScreen && (
         <div className="sticky bottom-0 left-0 right-0 flex items-center justify-end gap-2 px-4 py-2 bg-white border-t border-slate-200 shadow-lg z-10">
           <button
-            onClick={onCancel}
+            onClick={() => {
+              if (content === initialContent) {
+                onCancel();
+                return;
+              }
+              const patch = createPatch(docId || "document", content, initialContent);
+              setCancelPatch(patch);
+              setShowCancelConfirm(true);
+            }}
             className="px-4 py-2 text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 rounded transition-colors"
           >
             Cancel
@@ -602,6 +620,73 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               {isSaving ? "Saving..." : "Save"}
             </button>
          </div>
+      )}
+
+      {/* Cancel-with-diff modal */}
+      {showCancelConfirm && cancelPatch && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => {
+            setShowCancelConfirm(false);
+            setCancelPatch(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-5xl w-full h-[80vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">Discard changes?</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  You have unsaved edits. Review the diff before discarding your changes.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCancelConfirm(false);
+                  setCancelPatch(null);
+                }}
+                className="text-slate-400 hover:text-slate-700 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <PatchViewer
+                patch={cancelPatch}
+                metadata={undefined}
+                filter="all"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCancelConfirm(false);
+                  setCancelPatch(null);
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50"
+              >
+                Back to Editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCancelConfirm(false);
+                  setCancelPatch(null);
+                  onCancel();
+                }}
+                className="px-4 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
+              >
+                Discard Changes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Pre-save review modal */}
@@ -663,7 +748,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               </div>
             </div>
 
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <PatchViewer
                 patch={preSavePatch}
                 metadata={preSaveMetadata ?? { hunks: [] }}

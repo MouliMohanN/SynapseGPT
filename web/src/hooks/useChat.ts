@@ -89,6 +89,7 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
           sectionId: selectedSectionId,
           message: userMessage.content,
           allowOutsideDocumentAnswers: settings.allowOutsideDocumentAnswers,
+          historyRetrievalLimit: settings.historyRetrievalLimit,
           behavioralSettings: settings.chatBehavioralSettings,
         }),
         signal: controller.signal,
@@ -156,10 +157,30 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
     }
   };
 
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   const handleClearConversation = () => {
-    if (confirm("Clear all chat messages?")) {
-      setChatMessages([]);
-      localStorage.removeItem(CHAT_STORAGE_KEY);
+    setShowClearConfirm(true);
+  };
+
+  const confirmClearConversation = async () => {
+    // Clear client-side state
+    setChatMessages([]);
+    localStorage.removeItem(CHAT_STORAGE_KEY);
+    setShowClearConfirm(false);
+
+    // Clear server-side conversation history
+    try {
+      await fetch("/api/chat/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: DEFAULT_CONVERSATION_ID,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to clear server-side conversation:", error);
+      // Continue anyway - client is already cleared
     }
   };
 
@@ -198,6 +219,7 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
     chatMessages,
     isStreaming,
     streamingCharCount,
+    showClearConfirm,
     
     // Refs
     chatEndRef,
@@ -208,6 +230,8 @@ export const useChat = (selectedDocId: string | null, selectedSectionId: string 
     handleSend,
     handleStopGeneration,
     handleClearConversation,
+    confirmClearConversation,
+    setShowClearConfirm,
     handleRegenerateResponse,
     handleKeyDown,
     handleScroll,

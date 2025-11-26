@@ -80,9 +80,12 @@ export const useSummary = (
       }
       console.log("Stream completed after", chunkCount, "chunks");
     } catch (err) {
-      console.error("Summary generation error:", err);
-      if ((err as Error).name !== 'AbortError') {
-        const message = err instanceof Error ? err.message : "Unknown error";
+      if ((err as Error).name === 'AbortError') {
+        // Expected when the user cancels or navigates away; no need to surface as an error.
+        console.info('Summary generation aborted.');
+      } else {
+        console.error('Summary generation error:', err);
+        const message = err instanceof Error ? err.message : 'Unknown error';
         setSummaryError(message);
       }
     } finally {

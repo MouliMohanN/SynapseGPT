@@ -7,7 +7,6 @@ import { useDocumentTree } from './DocumentTree/useDocumentTree';
 import { useDocumentActions } from './DocumentTree/useDocumentActions';
 import { CreateFolderModal } from './CreateFolderModal';
 import { CreateFileModal } from './CreateFileModal';
-import { Toast } from './Toast';
 
 interface DocumentTreeProps {
   selectedDocId: string | null;
@@ -15,6 +14,7 @@ interface DocumentTreeProps {
   onSettingsClick: () => void;
   onUploadClick: () => void;
   refreshTrigger?: number;
+  onNotify?: (message: string, type: "success" | "error") => void;
 }
 
 export function DocumentTree({
@@ -23,21 +23,8 @@ export function DocumentTree({
   onSettingsClick,
   onUploadClick,
   refreshTrigger = 0,
+  onNotify,
 }: DocumentTreeProps) {
-  const [toast, setToast] = React.useState<{ message: string; type: "success" | "error" } | null>(null);
-  const toastTimeoutRef = React.useRef<number | null>(null);
-
-  const showToast = React.useCallback((message: string, type: "success" | "error" = "success") => {
-    if (toastTimeoutRef.current !== null) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
-    setToast({ message, type });
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToast(null);
-      toastTimeoutRef.current = null;
-    }, 3000);
-  }, []);
-
   // Use custom hook for tree state and loading
   const {
     docs,
@@ -64,7 +51,7 @@ export function DocumentTree({
     handleRename,
     confirmRename,
     cancelRename,
-  } = useDocumentActions({ docs, onRefresh: loadDocs, onNotify: showToast });
+  } = useDocumentActions({ docs, onRefresh: loadDocs, onNotify });
 
   const [isCreateFolderOpen, setIsCreateFolderOpen] = React.useState(false);
   const [createFolderParentPath, setCreateFolderParentPath] = React.useState("");
@@ -222,7 +209,7 @@ export function DocumentTree({
           onCreated={() => {
             setIsCreateFolderOpen(false);
             loadDocs();
-            showToast("Folder created", "success");
+            onNotify?.("Folder created", "success");
           }}
         />
       )}
@@ -234,11 +221,10 @@ export function DocumentTree({
           onCreated={() => {
             setIsCreateFileOpen(false);
             loadDocs();
-            showToast("File created", "success");
+            onNotify?.("File created", "success");
           }}
         />
       )}
-      {toast && <Toast message={toast.message} type={toast.type} />}
     </section>
   );
 }

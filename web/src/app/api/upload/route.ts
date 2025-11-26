@@ -4,6 +4,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { ingestFile } from "@/lib/rag/ingestor";
 import { convertDocumentToMarkdown, isSupportedByDocling } from "@/lib/pythonBridge";
+import { emitDocEvent } from "@/lib/docEvents";
 
 // Helper to get DOCS_ROOT
 const getDocsRoot = () => {
@@ -66,10 +67,20 @@ export async function POST(request: Request) {
         const isMarkdown = ext === ".md" || ext === ".txt";
         
         let fileToIngest = filePath;
+        let docIdForEvents = relativeFilePath;
         
+        emitDocEvent(docIdForEvents, {
+          type: "upload:start",
+          message: `Uploading "${relativeFilePath}"...`,
+        });
+
         if (!isMarkdown && isSupportedByDocling(originalName)) {
           // Convert to Markdown using Docling
           console.log(`Converting ${originalName} to Markdown...`);
+          emitDocEvent(docIdForEvents, {
+            type: "convert:start",
+            message: `Converting "${originalName}" to Markdown...`,
+          });
           const conversionResult = await convertDocumentToMarkdown(filePath);
           
           if (conversionResult.success && conversionResult.markdown) {
@@ -82,7 +93,13 @@ export async function POST(request: Request) {
             
             await fs.writeFile(mdFilePath, conversionResult.markdown, "utf-8");
             fileToIngest = mdFilePath;
+            docIdForEvents = mdRelativePath;
             console.log(`Successfully converted ${originalName} to ${mdFileName}`);
+            emitDocEvent(docIdForEvents, {
+              type: "convert:complete",
+              message: `Converted "${originalName}" to "${mdFileName}" for indexing.`,
+              meta: { source: relativeFilePath },
+            });
             
             // Delete the original file after successful conversion
             await fs.unlink(filePath);
@@ -90,15 +107,53 @@ export async function POST(request: Request) {
           } else {
             console.error(`Failed to convert ${originalName}:`, conversionResult.error);
             errors.push(`${file.name} (conversion failed)`);
+            emitDocEvent(docIdForEvents, {
+              type: "ingest:error",
+              message: `Failed to convert "${originalName}" for indexing.`,
+              meta: { error: conversionResult.error ?? "Conversion failed" },
+            });
             continue;
           }
         }
 
+        emitDocEvent(docIdForEvents, {
+          type: "ingest:start",
+          message: "Indexing uploaded document for search...",
+        });
+
         // Ingest the file (either original .md/.txt or converted .md)
-        await ingestFile(fileToIngest, docsRoot);
+        const ingestResult = await ingestFile(fileToIngest, docsRoot);
+
+        if (!ingestResult.success) {
+          emitDocEvent(docIdForEvents, {
+            type: "ingest:error",
+            message: ingestResult.message || "Upload indexing failed.",
+            meta: {
+              chunksIndexed: ingestResult.chunksIndexed,
+              success: false,
+            },
+          });
+          errors.push(`${file.name} (ingest failed)`);
+          continue;
+        }
+
+        emitDocEvent(docIdForEvents, {
+          type: "ingest:complete",
+          message: ingestResult.message || "Upload indexing complete.",
+          meta: {
+            chunksIndexed: ingestResult.chunksIndexed,
+            success: true,
+          },
+        });
+
         successCount++;
       } catch (err) {
         console.error(`Failed to process file ${file.name}:`, err);
+        emitDocEvent(file.name, {
+          type: "upload:error",
+          message: `Failed to upload "${file.name}"`,
+          meta: { error: String(err) },
+        });
         errors.push(file.name);
       }
     }

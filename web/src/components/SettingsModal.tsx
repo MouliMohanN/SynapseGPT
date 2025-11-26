@@ -10,6 +10,7 @@ interface SettingsModalProps {
     defaultLeftWidth: number;
     defaultRightWidth: number;
     allowOutsideDocumentAnswers: boolean;
+    historyRetrievalLimit: number;
     chatBehavioralSettings: {
       detailLevel: "overview" | "detailed" | "comprehensive";
       tone: "professional" | "casual" | "tutorial";
@@ -89,31 +90,7 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
           </button>
         </div>
 
-        <div className="flex items-center justify-between mb-4 p-3 border border-slate-200 rounded-lg bg-slate-50">
-          <div>
-            <p className="text-sm font-medium text-slate-900">Allow answers outside documents</p>
-            <p className="text-xs text-slate-600 mt-0.5">When enabled, SynapseGPT can answer even if the context isn’t in the loaded docs.</p>
-          </div>
-          <button
-            onClick={() =>
-              setLocalSettings((prev) => ({
-                ...prev,
-                allowOutsideDocumentAnswers: !prev.allowOutsideDocumentAnswers,
-              }))
-            }
-            className={`relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
-              localSettings.allowOutsideDocumentAnswers ? "bg-purple-600" : "bg-slate-300"
-            }`}
-            type="button"
-            aria-pressed={localSettings.allowOutsideDocumentAnswers}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                localSettings.allowOutsideDocumentAnswers ? "translate-x-6" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
+
 
         <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
           <p className="text-xs text-purple-900 leading-relaxed">
@@ -176,6 +153,75 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
           {/* Tab-specific settings */}
           {activeTab === "chat" && (
             <>
+              {/* <div className="text-sm font-medium text-slate-900 mb-3">History Settings</div>
+              
+              <div className="mb-4 px-3 py-2 border border-slate-200 rounded-lg bg-slate-50">
+                   <label className="block text-xs font-medium text-slate-700 mb-2">History Retrieval Limit</label>
+                   <div className="flex gap-2">
+                      <button
+                        onClick={() => setLocalSettings({ ...localSettings, historyRetrievalLimit: 0 })}
+                        className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                          localSettings.historyRetrievalLimit === 0
+                            ? "bg-purple-600 text-white shadow-sm"
+                            : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
+                        }`}
+                      >
+                        None
+                        <div className="text-[9px] opacity-75 mt-0.5">No history</div>
+                      </button>
+                      <button
+                        onClick={() => setLocalSettings({ ...localSettings, historyRetrievalLimit: -1 })}
+                        className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                          localSettings.historyRetrievalLimit === -1
+                            ? "bg-purple-600 text-white shadow-sm"
+                            : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
+                        }`}
+                      >
+                        Auto
+                        <div className="text-[9px] opacity-75 mt-0.5">Smart limit</div>
+                      </button>
+                      <button
+                        onClick={() => setLocalSettings({ ...localSettings, historyRetrievalLimit: 5 })}
+                        className={`flex-1 px-3 py-2 text-xs rounded transition-all ${
+                          localSettings.historyRetrievalLimit === 5
+                            ? "bg-purple-600 text-white shadow-sm"
+                            : "bg-white text-slate-700 hover:bg-purple-50 border border-slate-300"
+                        }`}
+                      >
+                        5
+                        <div className="text-[9px] opacity-75 mt-0.5">Fixed count</div>
+                      </button>
+                   </div>
+                </div> */}
+
+              <div className="text-sm font-medium text-slate-900 mb-3 mt-6">General Chat Settings</div>
+
+              <div className="flex items-center justify-between mb-4 p-3 border border-slate-200 rounded-lg bg-slate-50">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Allow answers outside documents</p>
+                  <p className="text-xs text-slate-600 mt-0.5">When enabled, SynapseGPT can answer even if the context isn’t in the loaded docs.</p>
+                </div>
+                <button
+                  onClick={() =>
+                    setLocalSettings((prev) => ({
+                      ...prev,
+                      allowOutsideDocumentAnswers: !prev.allowOutsideDocumentAnswers,
+                    }))
+                  }
+                  className={`relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+                    localSettings.allowOutsideDocumentAnswers ? "bg-purple-600" : "bg-slate-300"
+                  }`}
+                  type="button"
+                  aria-pressed={localSettings.allowOutsideDocumentAnswers}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      localSettings.allowOutsideDocumentAnswers ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
               <div className="text-sm font-medium text-slate-900 mb-3">Chat Behavior</div>
               {/* Detail Level */}
               <div>

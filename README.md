@@ -18,6 +18,7 @@ SynapseGPT is a **local-first**, privacy-focused AI chat application designed to
 - **📄 Multi-Format Support**: Upload and process PDF, Word, PowerPoint, Excel, HTML, images, and Markdown files.
 - **🤖 AI-Powered Conversion**: Uses [Docling](https://github.com/docling-project/docling) to convert documents to high-quality Markdown with preserved structure.
 - **📤 Drag-and-Drop Upload**: Easy file and folder uploads with automatic conversion and ingestion.
+ - **📡 Live Document Activity**: Top-right activity panel streaming upload, conversion, indexing, delete, and history events via Redis + SSE.
 
 ---
 
@@ -35,6 +36,7 @@ SynapseGPT uses a modern RAG pipeline:
 - **Vector DB**: ChromaDB (Local Python Server)
 - **Orchestration**: LangChain.js
 - **AI Engine**: Ollama
+ - **Event Bus**: Redis pub/sub + Server-Sent Events (SSE) for document activity
 
 ---
 
@@ -65,6 +67,7 @@ SynapseGPT/
 - **Node.js** (v18 or higher)
 - **Ollama** (Installed and running)
 - **Python 3.11** (Crucial for ChromaDB compatibility)
+ - **Redis** (for real-time Document Activity events)
 
 > [!IMPORTANT]
 > **Enable Parallel Requests in Ollama**
@@ -102,7 +105,28 @@ chroma run --path ./chroma_db
 *⚠️ Keep this terminal open! The server runs on `localhost:8000`.*
 *Note: Docling is required for PDF/Word conversion. First-time installation may take a few minutes.*
 
-### 3. Ingest Documents
+### 3. Start Redis (Document Activity events)
+
+Redis is used as a pub/sub bus for document events (uploads, deletes, indexing, history, UI notifications).
+
+```bash
+# macOS (Homebrew)
+brew install redis        # if not already installed
+redis-server
+```
+
+Keep this running so the **Document Activity** panel can receive events.
+
+To **stop** Redis:
+
+- If you started it in a terminal with `redis-server`, press `Ctrl+C` in that terminal.
+- If you run it as a Homebrew service, use:
+
+  ```bash
+  brew services stop redis
+  ```
+
+### 4. Ingest Documents
 Process your files from the `docs/` folder into the vector database:
 ```bash
 cd web
@@ -110,7 +134,7 @@ npx tsx scripts/ingest.ts
 ```
 *You should see "Ingestion complete!" and a count of chunks indexed.*
 
-### 4. Run the App
+### 5. Run the App
 In a new terminal, start the web interface:
 ```bash
 cd web
@@ -118,6 +142,41 @@ npm install  # Install dependencies if first time
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) to start chatting!
+
+---
+
+## 📡 Document Activity & Events
+
+SynapseGPT includes a **Document Activity** panel in the top-right corner of the UI. It shows a live stream of recent actions:
+
+- Uploads, conversions, and indexing into ChromaDB
+- Deletes and renames
+- History / diff operations
+- UI notifications (settings saved, editor actions, etc.)
+
+Under the hood:
+
+- Backend routes emit structured `DocEvent`s into **Redis** channels.
+- `/api/docs/[docId]/events` exposes a **Server-Sent Events (SSE)** stream.
+- The frontend subscribes once per selected document and renders events in the panel.
+
+Behavior:
+
+- The panel auto-clears after ~5 seconds of **no new events**.
+- Hovering over or scrolling the panel **pauses** auto-clear.
+- You can manually clear all entries with the **Clear** button.
+
+### Common event types
+
+- `upload:start` – File upload has begun.
+- `convert:start` / `convert:complete` – Non-markdown file (e.g. PDF) is being converted to Markdown for indexing.
+- `ingest:start` / `ingest:complete` / `ingest:error` – Indexing documents into ChromaDB (including embedding failures).
+- `delete:start` / `delete:complete` – Document or folder deleted from disk and vector store.
+- `rename:start` / `rename:complete` – Document or folder renamed.
+- `history:start` / `history:complete` / `history:error` – History or diff computations.
+- `ui:info` / `ui:error` / `ui:settings` – Client-side notifications such as editor actions or settings updates.
+
+These events are purely local and flow through Redis on your machine, keeping your workflow observable without leaking data off-device.
 
 ---
 
@@ -149,6 +208,7 @@ Environment variables are managed in `web/.env.local`.
 | :--- | :--- | :--- |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | URL of your local Ollama instance |
 | `CHROMA_DB_URL` | `http://localhost:8000` | URL of the ChromaDB server |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection URL for document activity events |
 | `DOCS_ROOT` | `../docs` | Path to your document folder |
 
 ---

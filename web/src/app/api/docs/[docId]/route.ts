@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { ingestFile, removeDocumentFromVectorStore } from "@/lib/rag/ingestor";
 import { saveHistory, deleteHistoryTree, moveHistoryTree } from "@/lib/history";
+import { emitDocEvent } from "@/lib/docEvents";
 
 // Helper to get DOCS_ROOT
 const getDocsRoot = () => {
@@ -175,20 +176,35 @@ export async function DELETE(
     }
 
     const stats = await fs.stat(filePath);
+    const isDirectory = stats.isDirectory();
 
-    if (stats.isDirectory()) {
-      await removeDirectoryFromVectorStore(filePath, docsRoot);
-      await deleteHistoryTree(sanitizedDocId);
+    emitDocEvent(sanitizedDocId, {
+      type: "delete:start",
+      message: isDirectory
+        ? `Deleting folder "${sanitizedDocId}" and its indexed content...`
+        : `Deleting document "${sanitizedDocId}" and its indexed content...`,
+    });
+
+    if (isDirectory) {
+      removeDirectoryFromVectorStore(filePath, docsRoot);
+      deleteHistoryTree(sanitizedDocId);
       await fs.rm(filePath, { recursive: true, force: true });
     } else {
       // Delete the file
       await fs.unlink(filePath);
-
+ 
       // Remove embeddings from the vector store
-      await removeDocumentFromVectorStore(sanitizedDocId);
-      await deleteHistoryTree(sanitizedDocId);
+      removeDocumentFromVectorStore(sanitizedDocId);
+      deleteHistoryTree(sanitizedDocId);
     }
     
+    emitDocEvent(sanitizedDocId, {
+      type: "delete:complete",
+      message: isDirectory
+        ? `Folder "${sanitizedDocId}" deleted.`
+        : `Document "${sanitizedDocId}" deleted.`,
+    });
+
     return NextResponse.json({ 
       success: true,
       message: `Deleted ${sanitizedDocId}` 
@@ -200,6 +216,26 @@ export async function DELETE(
       { status: 500 }
     );
   }
+}
+
+async function renameFolderOnDisk(oldPath: string, newPath: string, docsRoot: string, sanitizedDocId: string, oldDocIds: string[]) {
+  await fs.rename(oldPath, newPath);
+  moveHistoryTree(sanitizedDocId, path.relative(docsRoot, newPath));
+
+  for (const id of oldDocIds) {
+    await removeDocumentFromVectorStore(id);
+  }
+  // Re-ingest all supported documents under the new folder path
+  ingestDirectoryFiles(newPath, docsRoot);
+}
+
+async function renameFileOnDisk(oldPath: string, newPath: string, docsRoot: string, sanitizedDocId: string) {
+  await fs.rename(oldPath, newPath);
+  moveHistoryTree(sanitizedDocId, path.relative(docsRoot, newPath));
+
+  // Remove old embeddings and re-ingest the file under the new docId
+  await removeDocumentFromVectorStore(sanitizedDocId);
+  ingestFile(newPath, docsRoot);
 }
 
 // PATCH - Rename a document
@@ -244,6 +280,13 @@ export async function PATCH(
     const oldStats = await fs.stat(oldPath);
     let newPath: string;
 
+    emitDocEvent(sanitizedDocId, {
+      type: "rename:start",
+      message: oldStats.isDirectory()
+        ? `Renaming folder "${sanitizedDocId}" to "${sanitizedNewName}"...`
+        : `Renaming document "${sanitizedDocId}" to "${sanitizedNewName}"...`,
+    });
+
     if (oldStats.isDirectory()) {
       // Folders can be freely renamed using the provided name.
       newPath = path.join(path.dirname(oldPath), sanitizedNewName);
@@ -262,15 +305,7 @@ export async function PATCH(
       const oldDocIds = await collectDocIdsInDirectory(oldPath, docsRoot);
 
       // Rename the folder on disk
-      await fs.rename(oldPath, newPath);
-
-      for (const id of oldDocIds) {
-        await removeDocumentFromVectorStore(id);
-      }
-
-      // Re-ingest all supported documents under the new folder path
-      await ingestDirectoryFiles(newPath, docsRoot);
-      await moveHistoryTree(sanitizedDocId, path.relative(docsRoot, newPath));
+      renameFolderOnDisk(oldPath, newPath, docsRoot, sanitizedDocId, oldDocIds);
     } else {
       // For files, only allow renaming the basename while preserving the
       // original extension. Changing the extension (type) is not allowed.
@@ -301,15 +336,16 @@ export async function PATCH(
       }
 
       // Rename the file on disk
-      await fs.rename(oldPath, newPath);
-
-      // Remove old embeddings and re-ingest the file under the new docId
-      await removeDocumentFromVectorStore(sanitizedDocId);
-      await ingestFile(newPath, docsRoot);
-      await moveHistoryTree(sanitizedDocId, path.relative(docsRoot, newPath));
+      renameFileOnDisk(oldPath, newPath, docsRoot, sanitizedDocId);
     }
 
     const newDocId = path.relative(docsRoot, newPath);
+    emitDocEvent(sanitizedDocId, {
+      type: "rename:complete",
+      message: `Renamed to "${sanitizedNewName}".`,
+      meta: { newDocId },
+    });
+
     return NextResponse.json({ 
       success: true,
       newDocId,
@@ -365,14 +401,66 @@ export async function PUT(
 
     // Save history (Reverse Delta)
     if (oldContent) {
-       await saveHistory(sanitizedDocId, oldContent, content, historyMetadata ?? null);
+      (async () => {
+        try {
+          emitDocEvent(sanitizedDocId, {
+            type: "history:start",
+            message: "Saving edit history...",
+          });
+
+          const timestamp = await saveHistory(
+            sanitizedDocId,
+            oldContent,
+            content,
+            historyMetadata ?? null,
+          );
+
+          emitDocEvent(sanitizedDocId, {
+            type: "history:complete",
+            message: "Edit history saved.",
+            meta: { timestamp },
+          });
+        } catch (error) {
+          console.error("Failed to save history:", error);
+          emitDocEvent(sanitizedDocId, {
+            type: "history:error",
+            message: "Failed to save edit history.",
+            meta: { error: String(error) },
+          });
+        }
+      })();
     }
     
     // Save updated content
     await fs.writeFile(filePath, content, "utf-8");
 
     // Re-ingest to update embeddings
-    await ingestFile(filePath, docsRoot);
+    (async () => {
+      try {
+        emitDocEvent(sanitizedDocId, {
+          type: "ingest:start",
+          message: "Updating search index for this document...",
+        });
+
+        const result = await ingestFile(filePath, docsRoot);
+
+        emitDocEvent(sanitizedDocId, {
+          type: "ingest:complete",
+          message: result.message || "Document re-ingested.",
+          meta: {
+            chunksIndexed: result.chunksIndexed,
+            success: result.success,
+          },
+        });
+      } catch (error) {
+        console.error("Error during re-ingest:", error);
+        emitDocEvent(sanitizedDocId, {
+          type: "ingest:error",
+          message: "Failed to update search index for this document.",
+          meta: { error: String(error) },
+        });
+      }
+    })();
 
     return NextResponse.json({ 
       success: true,

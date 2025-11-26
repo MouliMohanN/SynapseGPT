@@ -7,11 +7,13 @@ import type { DocumentContent } from "@/lib/types";
 interface CenterPaneProps {
   selectedDocId: string | null;
   settings: any;
+  onNotify?: (message: string, type: "success" | "error") => void;
 }
 
 export function CenterPane({
   selectedDocId,
   settings,
+  onNotify,
 }: CenterPaneProps) {
   const documentViewerRef = useRef<HTMLDivElement>(null);
   const documentContentRef = useRef<HTMLDivElement>(null);
@@ -160,6 +162,7 @@ export function CenterPane({
             setShowSections={setShowSections}
             onDocumentUpdate={loadDoc}
             settings={settings}
+            onNotify={onNotify}
           />
         </div>
       </section>

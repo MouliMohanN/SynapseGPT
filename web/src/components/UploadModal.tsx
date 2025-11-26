@@ -17,6 +17,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
   const dropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const [convertedMarkdown, setConvertedMarkdown] = useState<string | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const convertFileInputRef = useRef<HTMLInputElement>(null);
+  const [isFullScreenPreviewOpen, setIsFullScreenPreviewOpen] = useState(false);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -103,8 +108,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
       return;
     }
 
-    setStatus("uploading");
-    setMessage(`Uploading and ingesting ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}...`);
+    // Close modal immediately; upload continues in the background and
+    // progress/errors are surfaced via the global activity panel.
+    onClose();
 
     const formData = new FormData();
     // Append target path (sanitize leading/trailing slashes if needed, but backend should handle it)
@@ -133,25 +139,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setStatus("success");
-        setMessage(`Successfully uploaded ${data.count} files!`);
         if (onUploadComplete) {
           onUploadComplete();
         }
-        setTimeout(() => {
-          onClose();
-          setStatus("idle");
-          setMessage("");
-          setTargetPath("");
-        }, 2000);
       } else {
-        setStatus("error");
-        setMessage(data.error || "Upload failed.");
+        console.error("Upload failed:", data.error || data);
       }
     } catch (err) {
       console.error("Network error during upload:", err);
-      setStatus("error");
-      setMessage("Network error occurred.");
     }
   };
 
@@ -180,6 +175,52 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
     } else if (e.dataTransfer.files) {
       // Fallback for browsers not supporting webkitGetAsEntry
       handleFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
+  const handleConvertFile = async (file: File) => {
+    setIsConverting(true);
+    setConvertedMarkdown(null);
+    setConvertError(null);
+    setIsFullScreenPreviewOpen(false);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+
+      const res = await fetch("/api/convert", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success && data.markdown) {
+        setConvertedMarkdown(data.markdown);
+      } else {
+        setConvertError(data.error || "Conversion failed.");
+      }
+    } catch (err) {
+      console.error("Network error during conversion:", err);
+      setConvertError("Network error occurred during conversion.");
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
+  const onConvertFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    await handleConvertFile(file);
+    e.target.value = "";
+  };
+
+  const handleCopyConverted = async () => {
+    if (!convertedMarkdown) return;
+    try {
+      await navigator.clipboard.writeText(convertedMarkdown);
+    } catch (err) {
+      console.error("Failed to copy markdown:", err);
     }
   };
 
@@ -295,6 +336,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
                 </button>
               </div>
 
+              <div className="mt-4">
+                <button
+                  onClick={() => convertFileInputRef.current?.click()}
+                  className="px-3 py-1.5 bg-white border border-purple-200 hover:bg-purple-50 text-purple-700 rounded-md text-xs font-medium transition-colors shadow-sm disabled:opacity-60"
+                  disabled={isConverting}
+                >
+                  {isConverting ? "Converting..." : "Convert file to Markdown (preview)"}
+                </button>
+              </div>
+
               <input
                 type="file"
                 ref={fileInputRef}
@@ -312,9 +363,83 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
                 // webkitdirectory is non-standard but supported in modern browsers
                 {...({ webkitdirectory: "", directory: "" } as any)}
               />
+              <input
+                type="file"
+                ref={convertFileInputRef}
+                className="hidden"
+                accept=".md,.txt,.pdf,.docx,.doc,.pptx,.xlsx,.html,.htm,.png,.jpg,.jpeg,.asciidoc,.adoc"
+                onChange={onConvertFileChange}
+              />
             </>
           )}
         </div>
+
+        {convertedMarkdown && (
+          <div className="mt-4 border border-slate-200 rounded-md p-3 bg-slate-50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-slate-700">Converted Markdown Preview</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsFullScreenPreviewOpen(true)}
+                  className="px-2 py-1 text-[10px] rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100"
+                >
+                  Full screen
+                </button>
+                <button
+                  onClick={handleCopyConverted}
+                  className="px-2 py-1 text-xs rounded-md bg-slate-800 text-white hover:bg-slate-900"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            <pre className="max-h-60 overflow-auto text-xs text-slate-800 whitespace-pre-wrap">
+              {convertedMarkdown}
+            </pre>
+          </div>
+        )}
+
+        {convertError && (
+          <div className="mt-2 text-xs text-red-600">
+            {convertError}
+          </div>
+        )}
+
+        {isFullScreenPreviewOpen && convertedMarkdown && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsFullScreenPreviewOpen(false);
+            }}
+          >
+            <div
+              className="bg-white rounded-lg shadow-xl max-w-5xl w-full h-[90vh] mx-4 flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 bg-slate-50">
+                <span className="text-sm font-medium text-slate-800">Converted Markdown Preview</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopyConverted}
+                    className="px-3 py-1 text-xs rounded-md bg-slate-800 text-white hover:bg-slate-900"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => setIsFullScreenPreviewOpen(false)}
+                    className="text-sm text-slate-500 hover:text-slate-800"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 overflow-auto p-4 bg-white">
+                <pre className="text-xs text-slate-800 whitespace-pre-wrap">{convertedMarkdown}</pre>
+              </div>
+            </div>
+          </div>
+        )}
 
         {message && (
           <div className={`mt-4 p-3 rounded-md text-sm flex items-start gap-2 ${

@@ -5,6 +5,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as dotenv from "dotenv";
+import { createChromaClient } from "./chroma-utils";
 
 dotenv.config({ path: ".env.local" });
 
@@ -18,19 +19,23 @@ const embeddings = new OllamaEmbeddings({
   baseUrl: OLLAMA_URL,
 });
 
-// Initialize Splitter
-const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 1000,
-  chunkOverlap: 200,
+// Initialize Markdown-Aware Splitter
+// This splitter respects markdown structure and keeps headings with their content
+const splitter = RecursiveCharacterTextSplitter.fromLanguage("markdown", {
+  chunkSize: 3000,        // Larger chunks to keep sections together
+  chunkOverlap: 800,      // Large overlap ensures H1 titles are included with first section
+  // Markdown splits on: \n##, \n###, \n\n, \n, " " in that order
+  // This ensures headings stay with their content
 });
 
 let vectorStorePromise: Promise<Chroma> | null = null;
 
 async function getVectorStoreInstance() {
   if (!vectorStorePromise) {
+    const client = createChromaClient(CHROMA_URL);
     vectorStorePromise = Chroma.fromExistingCollection(embeddings, {
       collectionName: COLLECTION_NAME,
-      url: CHROMA_URL,
+      index: client,
     });
   }
   return vectorStorePromise;
@@ -90,9 +95,10 @@ async function processDocuments(documents: any[]): Promise<IngestionResult> {
     const chunks = await splitter.splitDocuments(documents);
     
     if (chunks.length > 0) {
+      const client = createChromaClient(CHROMA_URL);
       await Chroma.fromDocuments(chunks, embeddings, {
         collectionName: COLLECTION_NAME,
-        url: CHROMA_URL,
+        index: client,
       });
     }
 

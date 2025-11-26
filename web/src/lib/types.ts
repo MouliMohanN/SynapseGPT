@@ -44,6 +44,7 @@ export interface ChatRequestBody {
   sectionId?: string | null;
   message: string;
   allowOutsideDocumentAnswers: boolean;
+  historyRetrievalLimit: number;
   behavioralSettings: {
     detailLevel: "overview" | "detailed" | "comprehensive";
     tone: "professional" | "casual" | "tutorial";

@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     message,
     behavioralSettings,
     allowOutsideDocumentAnswers,
+    historyRetrievalLimit,
   } = body;
 
   if (!conversationId || !message) {
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
   // If it is chat, we want global retrieval (pass null as docId).
   const retrievalContext = isSummary 
     ? "" 
-    : await buildRetrievalContext(message);
+    : await buildRetrievalContext(message, historyRetrievalLimit);
 
   const systemPrompt = buildSystemPrompt({
     docId: docId ?? null,
@@ -128,22 +129,71 @@ async function buildDocumentContext(docId: string | null, sectionId: string | nu
   return docContent.rawText;
 }
 
-async function buildRetrievalContext(message: string) {
+async function buildRetrievalContext(message: string, historyRetrievalLimit?: number) {
   if (!isRetrievalContextEnabled()) {
     return "";
   }
 
-  const retrievedChunks = await retrieveRelevantChunks(message, 4);
+  const retrievedChunks = await retrieveRelevantChunks(message, 8);
+
+  // // History Retrieval
+  // let historyContext = "";
+  
+  // // Determine effective limit
+  // const envLimit = parseInt(process.env.HISTORY_RETRIEVAL_LIMIT || "5");
+  // let limit = envLimit;
+  
+  // if (historyRetrievalLimit !== undefined) {
+  //   if (historyRetrievalLimit === 0) limit = 0;
+  //   else if (historyRetrievalLimit === -1) limit = 1000; // Auto: retrieve all
+  //   else if (historyRetrievalLimit > 0) limit = historyRetrievalLimit;
+  // }
+
+  // // Only proceed if limit > 0 and intent detected
+  // if (limit > 0 && detectHistoryIntent(message)) {
+  //   const historyChunks = await retrieveHistory(message, { limit });
+  //     if (historyChunks.length > 0) {
+  //       historyContext = "\n\n[DOCUMENT HISTORY / CHANGES]\n" + historyChunks
+  //         .map(chunk => {
+  //           const parts = [
+  //             `Date: ${chunk.metadata.timestamp} (Priority: ${chunk.metadata.priority})`,
+  //             `Summary: ${chunk.metadata.summary}`,
+  //             `Stats: +${chunk.metadata.additions} additions, -${chunk.metadata.deletions} deletions`
+  //           ];
+            
+  //           // Include the actual patch content for context
+  //           if (chunk.content) {
+  //             parts.push(`Changes:\n${chunk.content.slice(0, 500)}${chunk.content.length > 500 ? '...(truncated)' : ''}`);
+  //           }
+            
+  //           return parts.join('\n');
+  //         })
+  //         .join("\n\n---\n\n");
+  //     }
+  //   }
+
+  // if (!retrievedChunks.length && !historyContext) {
+  //   return "";
+  // }
 
   if (!retrievedChunks.length) {
     return "";
   }
 
-  return retrievedChunks
+  const docsContext = retrievedChunks
     .map(
       (chunk) =>
         `Source: ${chunk.metadata.docName || chunk.metadata.source}\nContent: ${chunk.content}`,
     )
     .join("\n\n---\n\n");
+    
+  // return docsContext + historyContext;
+  return docsContext;
 }
+
+// function detectHistoryIntent(message: string): boolean {
+//   const keywords = ["history", "changed", "changes", "previous", "version", "diff", "earlier", "was", "past"];
+//   const lowerMsg = message.toLowerCase();
+//   return keywords.some(k => lowerMsg.includes(k));
+// }
 

@@ -6,7 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "ingest": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/ingest.ts",
+    "rebuild-docs-db": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/rebuild-docs-db.ts",
+    "rebuild-history-db": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/rebuild-history-db.ts",
+    "inspect-chroma-db": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/inspect-chroma-db.ts",
+    "clear-chroma-db": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/clear-chroma-db.ts",
+    "test-db-lifecycle": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/test-db-lifecycle.ts",
+    "test-ollama-connection": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/test-ollama-connection.ts",
+    "test-retrieval": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/test-retrieval.ts",
+    "test-comprehensive-history": "npx ts-node --compiler-options '{\"module\":\"commonjs\"}' -r tsconfig-paths/register scripts/test-comprehensive-history.ts"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",
@@ -30,7 +39,8 @@
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
     "rehype-raw": "^7.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "redis": "^4.7.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -41,6 +51,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
     "tailwindcss": "^4",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5"
   }
 }

@@ -43,7 +43,7 @@ export async function saveHistory(
   oldContent: string,
   newContent: string,
   metadata?: HistoryPatchMetadata | null,
-) {
+): Promise<string | null> {
   try {
     const historyRoot = getHistoryRoot();
     const docHistoryDir = path.join(historyRoot, docId);
@@ -67,9 +67,11 @@ export async function saveHistory(
     }
     
     console.log(`Saved history patch for ${docId} at ${timestamp}`);
+    return timestamp;
   } catch (error) {
     console.error("Failed to save history:", error);
     // We don't want to block the main save operation if history fails
+    return null;
   }
 }
 
