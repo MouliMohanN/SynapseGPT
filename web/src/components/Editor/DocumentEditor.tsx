@@ -654,7 +654,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               </button>
             </div>
 
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <PatchViewer
                 patch={cancelPatch}
                 metadata={undefined}
@@ -748,7 +748,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               </div>
             </div>
 
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <PatchViewer
                 patch={preSavePatch}
                 metadata={preSaveMetadata ?? { hunks: [] }}

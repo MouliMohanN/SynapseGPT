@@ -90,7 +90,6 @@ IMPORTANT RULES:
 - Be SPECIFIC about what content was added, modified, or removed
 - Include actual names, titles, sections, or key terms that changed
 - Mention the PURPOSE or IMPACT of the change when clear from context
-- Keep it to 1-2 sentences but make them MEANINGFUL
 - Avoid generic phrases like "updated content" or "made changes"
 - Adapt your language to the document type (technical, business, creative, etc.)
 
@@ -179,11 +178,8 @@ export async function ingestHistoryVersion(
     // 2. Prepare Document
     const eventId = generateEventId(docId, timestamp);
     
-    // Include actual patch content (truncated for embedding efficiency)
-    const truncatedPatch = patchContent.slice(0, 1000);
-    
     const document = {
-      pageContent: `Change in ${docId} at ${timestamp}: ${summary}\n\nDiff Stats: +${stats.additions} -${stats.deletions}\n\nPatch:\n${truncatedPatch}${patchContent.length > 1000 ? '\n...(truncated)' : ''}`,
+      pageContent: `Change in ${docId} at ${timestamp}: ${summary}\n\nDiff Stats: +${stats.additions} -${stats.deletions}\n\nPatch:\n${patchContent}`,
       metadata: {
         id: eventId,
         docId,
