@@ -8,6 +8,7 @@ export interface OllamaModelConfig {
   topP?: number;
   maxTokens?: number;
   repeatPenalty?: number;
+  numCtx?: number;
 }
 
 export interface OllamaChatRequest {
@@ -18,7 +19,7 @@ export interface OllamaChatRequest {
 
 export async function* streamOllamaResponse(request: OllamaChatRequest) {
   const ollamaBody = {
-    model: OLLAMA_MODEL,
+    model: request.modelConfig?.model || OLLAMA_MODEL,
     stream: true,
     messages: [
       ...(request.systemPrompt
@@ -31,6 +32,7 @@ export async function* streamOllamaResponse(request: OllamaChatRequest) {
       top_p: request.modelConfig?.topP ?? 0.9,
       num_predict: request.modelConfig?.maxTokens ?? -1,
       repeat_penalty: 1.1,
+      num_ctx: request.modelConfig?.numCtx ?? 2048,
     },
   } as const;
 
@@ -101,6 +103,7 @@ export async function* streamOllamaCompletion(request: OllamaCompletionRequest) 
       top_p: request.modelConfig?.topP ?? 0.9,
       num_predict: request.modelConfig?.maxTokens ?? 50,
       repeat_penalty: request.modelConfig?.repeatPenalty ?? 1.1,
+      num_ctx: request.modelConfig?.numCtx ?? 2048,
     },
   } as const;
 

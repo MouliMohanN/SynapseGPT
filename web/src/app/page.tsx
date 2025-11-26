@@ -10,6 +10,7 @@ import { AboutModal } from "@/components/AboutModal";
 import { useSettings } from "@/hooks/useSettings";
 import { HeaderBar } from "@/components/HeaderBar";
 import { UploadModal } from "@/components/UploadModal";
+
 type DocEventUI = {
   docId: string;
   type: string;
@@ -17,6 +18,9 @@ type DocEventUI = {
   timestamp: string;
   meta?: any;
 };
+
+const AGENT_PANEL_HEIGHT_EXPANDED = 280;
+const AGENT_PANEL_HEIGHT_MINIMIZED = 60;
 
 export default function HomePage() {
   // Settings
@@ -38,6 +42,9 @@ export default function HomePage() {
   const [eventLog, setEventLog] = useState<DocEventUI[]>([]);
   const eventLogTimeoutRef = React.useRef<number | null>(null);
   const [isActivityHovered, setIsActivityHovered] = useState(false);
+  const [isAgentRunning, setIsAgentRunning] = useState(false);
+  const [isAgentMinimized, setIsAgentMinimized] = useState(false);
+  const [agentPanelHeight, setAgentPanelHeight] = useState(0);
 
   const scheduleAutoClear = useCallback(() => {
     if (eventLogTimeoutRef.current !== null) {
@@ -197,6 +204,11 @@ export default function HomePage() {
     };
   }, [selectedDocId, addEventToLog]);
 
+  // Calculate agent bottom offset
+  const agentBottomOffset = isAgentRunning 
+    ? (isAgentMinimized ? AGENT_PANEL_HEIGHT_MINIMIZED : AGENT_PANEL_HEIGHT_EXPANDED)
+    : 0;
+
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden">
       {/* Header with branding */}
@@ -224,6 +236,14 @@ export default function HomePage() {
           selectedDocId={selectedDocId}
           settings={settings}
           onNotify={handleNotify}
+          onAgentStateChange={(isRunning, isMinimized) => {
+            setIsAgentRunning(isRunning);
+            setIsAgentMinimized(isMinimized);
+            // Reset height when agent stops
+            if (!isRunning) setAgentPanelHeight(0);
+          }}
+          onAgentHeightChange={setAgentPanelHeight}
+          onSelectDoc={handleSelectDoc}
         />
 
         {/* Resize handle for right panel */}
@@ -238,6 +258,7 @@ export default function HomePage() {
           selectedSectionId={null}
           settings={settings}
           rightPanelWidth={rightPanelWidth}
+          agentBottomOffset={agentPanelHeight}
         />
       </main>
 

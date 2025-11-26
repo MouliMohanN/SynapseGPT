@@ -8,12 +8,18 @@ interface CenterPaneProps {
   selectedDocId: string | null;
   settings: any;
   onNotify?: (message: string, type: "success" | "error") => void;
+  onAgentStateChange?: (isRunning: boolean, isMinimized: boolean) => void;
+  onAgentHeightChange?: (height: number) => void;
+  onSelectDoc?: (docId: string) => void;
 }
 
 export function CenterPane({
   selectedDocId,
   settings,
   onNotify,
+  onAgentStateChange,
+  onAgentHeightChange,
+  onSelectDoc,
 }: CenterPaneProps) {
   const documentViewerRef = useRef<HTMLDivElement>(null);
   const documentContentRef = useRef<HTMLDivElement>(null);
@@ -163,6 +169,9 @@ export function CenterPane({
             onDocumentUpdate={loadDoc}
             settings={settings}
             onNotify={onNotify}
+            onAgentStateChange={onAgentStateChange}
+            onAgentHeightChange={onAgentHeightChange}
+            onSelectDoc={onSelectDoc}
           />
         </div>
       </section>

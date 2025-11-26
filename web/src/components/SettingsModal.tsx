@@ -31,11 +31,17 @@ interface SettingsModalProps {
       maxTokens: number;
       repeatPenalty: number;
     };
+    qaAgentSettings: {
+      model: string;
+      temperature: number;
+      maxTokens: number;
+      numCtx: number;
+    };
   };
   onSave: (settings: SettingsModalProps["settings"]) => void;
 }
 
-type SettingsTab = "chat" | "summary" | "editor";
+type SettingsTab = "chat" | "summary" | "editor" | "qa";
 
 type BehavioralSettingsType = {
   detailLevel: "overview" | "detailed" | "comprehensive";
@@ -132,6 +138,16 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
             }`}
           >
             Editor Settings
+          </button>
+          <button
+            onClick={() => setActiveTab("qa")}
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+              activeTab === "qa"
+                ? "text-purple-600 border-purple-600"
+                : "text-slate-600 border-transparent hover:text-slate-900"
+            }`}
+          >
+            QA Agent
           </button>
         </div>
 
@@ -653,6 +669,107 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {activeTab === "qa" && (
+            <div className="space-y-4">
+              <div className="text-sm font-medium text-slate-900 mb-3">QA Agent Configuration</div>
+              
+              {/* QA Model */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Agent Model
+                </label>
+                <input
+                  type="text"
+                  value={localSettings.qaAgentSettings.model}
+                  onChange={(e) =>
+                    setLocalSettings((prev) => ({
+                      ...prev,
+                      qaAgentSettings: {
+                        ...prev.qaAgentSettings,
+                        model: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+                <p className="text-[10px] text-slate-600 mt-1">Recommended: qwen2.5-coder:1.5b (Fast) or qwen2.5-coder:7b (Pro)</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Temperature */}
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <label className="text-xs font-medium text-slate-700">Temperature</label>
+                    <span className="text-xs text-slate-500">{localSettings.qaAgentSettings.temperature}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={localSettings.qaAgentSettings.temperature}
+                    onChange={(e) =>
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        qaAgentSettings: {
+                          ...prev.qaAgentSettings,
+                          temperature: parseFloat(e.target.value),
+                        },
+                      }))
+                    }
+                    className="w-full accent-purple-600"
+                  />
+                  <p className="text-[10px] text-slate-600 mt-1">Lower = more precise, Higher = more creative</p>
+                </div>
+
+                {/* Context Window */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Context Window (num_ctx)</label>
+                  <input
+                    type="number"
+                    min="2048"
+                    max="128000"
+                    step="1024"
+                    value={localSettings.qaAgentSettings.numCtx}
+                    onChange={(e) =>
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        qaAgentSettings: {
+                          ...prev.qaAgentSettings,
+                          numCtx: parseInt(e.target.value),
+                        },
+                      }))
+                    }
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <p className="text-[10px] text-slate-600 mt-1">Memory size (tokens)</p>
+                </div>
+
+                {/* Max Tokens */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Max Output Tokens</label>
+                  <input
+                    type="number"
+                    min="-1"
+                    max="32000"
+                    value={localSettings.qaAgentSettings.maxTokens}
+                    onChange={(e) =>
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        qaAgentSettings: {
+                          ...prev.qaAgentSettings,
+                          maxTokens: parseInt(e.target.value),
+                        },
+                      }))
+                    }
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <p className="text-[10px] text-slate-600 mt-1">-1 for infinite</p>
+                </div>
+              </div>
             </div>
           )}
           <div className="border-t border-slate-200 pt-4 mt-4">

@@ -19,6 +19,9 @@ interface DocumentViewerProps {
   onDocumentUpdate?: () => void;
   settings: any;
   onNotify?: (message: string, type: "success" | "error") => void;
+  onAgentStateChange?: (isRunning: boolean, isMinimized: boolean) => void;
+  onAgentHeightChange?: (height: number) => void;
+  onSelectDoc?: (docId: string) => void;
 }
 
 export function DocumentViewer({
@@ -31,10 +34,14 @@ export function DocumentViewer({
   onDocumentUpdate,
   settings,
   onNotify,
+  onAgentStateChange,
+  onAgentHeightChange,
+  onSelectDoc,
 }: DocumentViewerProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
   const shareMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const agentPanelRef = React.useRef<HTMLDivElement | null>(null);
   
   // History State
   const [showHistory, setShowHistory] = useState(false);
@@ -48,6 +55,50 @@ export function DocumentViewer({
   const [isHistoryFullScreen, setIsHistoryFullScreen] = useState(false);
   const [showCopyLinkModal, setShowCopyLinkModal] = useState(false);
   const [linkToCopy, setLinkToCopy] = useState('');
+
+  // Agent State
+  const [isAgentRunning, setIsAgentRunning] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<string>('');
+  const [agentThoughts, setAgentThoughts] = useState<string[]>([]);
+  const [agentLLMOutput, setAgentLLMOutput] = useState<string[]>([]);
+  const [isAgentMinimized, setIsAgentMinimized] = useState(false);
+  const [isAgentMaximized, setIsAgentMaximized] = useState(false);
+  const [agentAbortController, setAgentAbortController] = useState<AbortController | null>(null);
+
+  // Notify parent of Agent state changes
+  React.useEffect(() => {
+    onAgentStateChange?.(isAgentRunning, isAgentMinimized);
+  }, [isAgentRunning, isAgentMinimized, onAgentStateChange]);
+
+  // Measure Agent Panel Height
+  React.useEffect(() => {
+    if (!agentPanelRef.current) {
+      onAgentHeightChange?.(0);
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        onAgentHeightChange?.(entry.contentRect.height);
+      }
+    });
+
+    observer.observe(agentPanelRef.current);
+
+    return () => observer.disconnect();
+  }, [isAgentRunning, isAgentMinimized, isAgentMaximized, onAgentHeightChange]);
+
+  // Prevent body scroll when Agent is maximized
+  React.useEffect(() => {
+    if (isAgentMaximized) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isAgentMaximized]);
 
   const fetchHistory = async () => {
     if (!docContent?.id) return;
@@ -96,6 +147,162 @@ export function DocumentViewer({
       }
     } catch (error) {
       console.error("Failed to fetch version:", error);
+    }
+  };
+
+  const handleGenerateTestPlan = async () => {
+    if (!docContent?.id || !docContent?.name) return;
+
+    // Only allow for .md files that are NOT already test plans
+    if (!docContent.name.endsWith('.md') || docContent.name.includes('_test_cases')) {
+      onNotify?.("Can only generate test plans from PRD markdown files", "error");
+      return;
+    }
+
+    setIsAgentRunning(true);
+    setAgentStatus('Initializing Agent...');
+    setAgentThoughts([]);
+    setAgentLLMOutput([]);
+
+    const abortController = new AbortController();
+    setAgentAbortController(abortController);
+
+    try {
+      const response = await fetch('/api/agent/generate-test-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileContent: docContent.rawText,
+          fileName: docContent.name,
+          docId: docContent.id,
+          modelConfig: settings.qaAgentSettings,
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalMarkdown = '';
+
+      const processLine = (line: string) => {
+        if (!line.trim()) return;
+
+        try {
+          const event = JSON.parse(line);
+
+          if (event.type === 'thought') {
+            setAgentThoughts((prev) => [...prev, event.message]);
+          } else if (event.type === 'progress') {
+            setAgentLLMOutput((prev) => [...prev, event.message]);
+          } else if (event.type === 'requirement') {
+            setAgentThoughts((prev) => [...prev, `✓ ${event.message}`]);
+          } else if (event.type === 'test') {
+            // Incrementally save test cases as they're generated
+            if (event.data?.partialMarkdown) {
+              // Partial markdown received, but we only save at the end now
+            }
+          } else if (event.type === 'complete') {
+            finalMarkdown = event.data?.markdown || '';
+            console.log('Final markdown received:', finalMarkdown.length, 'chars');
+            setAgentStatus('Test plan generated!');
+          } else if (event.type === 'error') {
+            throw new Error(event.message);
+          }
+        } catch (parseError) {
+          console.error('Failed to parse event:', line, parseError);
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        
+        if (value) {
+          buffer += decoder.decode(value, { stream: !done });
+        }
+
+        if (done) {
+          // Flush any remaining buffer
+          if (buffer.trim()) {
+             const lines = buffer.split('\n');
+             for (const line of lines) {
+               if (line.trim()) processLine(line);
+             }
+          }
+          break;
+        }
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          processLine(line);
+        }
+      }
+
+      // Save the generated test plan
+      if (finalMarkdown) {
+        const testPlanName = docContent.name.replace('.md', '_test_cases.md');
+        const testPlanPath = docContent.path.replace(docContent.name, testPlanName);
+
+        const parentPath = docContent.path.split('/').slice(0, -1).join('/');
+        const saveResponse = await fetch('/api/docs/file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: testPlanName,
+            parentPath: parentPath,
+            content: finalMarkdown,
+            overwrite: true,
+            relatedDocId: docContent.id,
+          }),
+        });
+
+        if (saveResponse.ok) {
+          onNotify?.(`Test plan saved: ${testPlanName} (${finalMarkdown.length} chars)`, "success");
+          onDocumentUpdate?.();
+          
+          // Auto-navigate to the new file
+          if (onSelectDoc) {
+             // Construct the docId for the new file
+             // docContent.id is like "folder/doc.md"
+             // testPlanName is "doc_test_cases.md"
+             // parentPath is "folder"
+             const newDocId = parentPath ? `${parentPath}/${testPlanName}` : testPlanName;
+             onSelectDoc(newDocId);
+          }
+        } else {
+          throw new Error('Failed to save test plan');
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        onNotify?.("Agent execution stopped by user", "success");
+        setAgentStatus('Stopped by user');
+      } else {
+        console.error('Agent error:', error);
+        onNotify?.(error instanceof Error ? error.message : 'Agent failed', "error");
+        setAgentStatus('Error occurred');
+      }
+    } finally {
+      setAgentAbortController(null);
+      setIsAgentRunning(false);
+      setTimeout(() => {
+        setAgentStatus('');
+        setAgentThoughts([]);
+        setAgentLLMOutput([]);
+      }, 3000);
+    }
+  };
+
+  const handleStopAgent = () => {
+    if (agentAbortController) {
+      agentAbortController.abort();
+      setAgentStatus('Stopping Agent...');
     }
   };
 
@@ -373,8 +580,25 @@ export function DocumentViewer({
                </svg>
                History
              </button>
-          )}
-          {docContent && !isEditing && (
+           )}
+           {docContent && !isEditing && docContent.name.endsWith('.md') && !docContent.name.includes('_test_cases') && (
+             <button
+               onClick={handleGenerateTestPlan}
+               disabled={isAgentRunning}
+               className={`text-xs px-2 py-0.5 rounded-md shadow-sm transition-colors flex items-center gap-1 ${
+                 isAgentRunning
+                   ? 'bg-purple-100 text-purple-700 border border-purple-200 cursor-wait'
+                   : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white'
+               }`}
+               title="Generate Test Plan using AI Agent"
+             >
+               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+               </svg>
+               {isAgentRunning ? 'Generating...' : '🤖 Generate Tests'}
+             </button>
+           )}
+           {docContent && !isEditing && (
             <button
               onClick={() => {
                 // Exit history view when entering edit mode so the editor takes precedence
@@ -534,6 +758,118 @@ export function DocumentViewer({
         </div>
       )}
 
+      {/* Agent Status Panel */}
+      {isAgentRunning && (
+        <div 
+          ref={agentPanelRef}
+          className={`fixed z-50 bg-white border-2 border-purple-300 rounded-lg shadow-2xl transition-all ${
+            isAgentMaximized 
+              ? 'inset-4 overflow-hidden' 
+              : isAgentMinimized 
+                ? 'bottom-4 right-4 w-80' 
+                : 'bottom-4 right-4 w-96'
+          }`}
+          onClick={(e) => isAgentMaximized && e.stopPropagation()}
+        >
+          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+              <h3 className="text-sm font-semibold text-white">🤖 QA Agent Working</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleStopAgent}
+                className="text-white hover:text-red-200 transition-colors px-2 py-1 bg-red-500 hover:bg-red-600 rounded text-xs font-medium"
+                title="Stop Agent"
+              >
+                ⏹ Stop
+              </button>
+              {!isAgentMinimized && (
+                <button
+                  onClick={() => setIsAgentMaximized(!isAgentMaximized)}
+                  className="text-white hover:text-purple-200 transition-colors"
+                  title={isAgentMaximized ? "Restore" : "Maximize"}
+                >
+                  {isAgentMaximized ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => setIsAgentMinimized(!isAgentMinimized)}
+                className="text-white hover:text-purple-200 transition-colors"
+                title={isAgentMinimized ? "Expand" : "Minimize"}
+              >
+                {isAgentMinimized ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+          {!isAgentMinimized && (
+            <div className={`p-4 flex ${isAgentMaximized ? 'gap-4 h-[calc(100%-3rem)]' : 'flex-col max-h-[400px]'}`}>
+              {!isAgentMaximized && (
+                <div className="text-sm font-medium text-purple-700 pb-3 border-b border-purple-200 shrink-0 mb-3">
+                  {agentStatus}
+                </div>
+              )}
+
+              {isAgentMaximized ? (
+                <>
+                 <div className="flex-1 flex flex-col min-w-0">
+                    <div className="text-xs font-semibold text-slate-700 mb-2 shrink-0">🤖 LLM Streaming:</div>
+                    <div className="flex-1 overflow-y-auto bg-slate-50 rounded p-3 border border-slate-200">
+                      <pre className="text-xs text-slate-700 font-mono whitespace-pre-wrap font-medium h-full">
+                        {agentLLMOutput.join('') || <span className="text-slate-400 italic font-sans">Waiting for LLM output...</span>}
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex-1 flex flex-col min-w-0 ">
+                    <div className="text-xs font-semibold text-slate-700 mb-2 shrink-0">💭 Agent Thoughts:</div>
+                    <div className="flex-1 overflow-y-auto bg-slate-50 rounded p-3 space-y-2 border border-slate-200">
+                      {agentThoughts.map((thought, idx) => (
+                        <div key={idx} className="text-xs text-slate-700 flex items-start gap-2 py-1 leading-relaxed">
+                          <span className="text-purple-500 shrink-0">▸</span>
+                          <span>{thought}</span>
+                        </div>
+                      ))}
+                      {agentThoughts.length === 0 && (
+                        <div className="text-xs text-slate-400 italic">Agent is thinking...</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                agentThoughts.length > 0 && (
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    <div className="text-xs font-semibold text-slate-600 mb-2 shrink-0">💭 Agent Thoughts:</div>
+                    <div className="flex-1 overflow-y-auto bg-slate-50 rounded p-2 space-y-1 border border-slate-200">
+                      {agentThoughts.slice(-10).map((thought, idx) => (
+                        <div key={idx} className="text-xs text-slate-600 flex items-start gap-1 py-0.5">
+                          <span className="text-purple-500 shrink-0">▸</span>
+                          <span>{thought}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

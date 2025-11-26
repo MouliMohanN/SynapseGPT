@@ -26,6 +26,12 @@ const defaultSettings = {
     maxTokens: 50,
     repeatPenalty: 1.1,
   },
+  qaAgentSettings: {
+    model: "qwen2.5-coder:1.5b",
+    temperature: 0.3,
+    maxTokens: -1,
+    numCtx: 32768,
+  },
 };
 
 export const useSettings = () => {
@@ -50,6 +56,10 @@ export const useSettings = () => {
             autocompleteSettings: {
               ...defaultSettings.autocompleteSettings,
               ...(parsed.autocompleteSettings ?? {}),
+            },
+            qaAgentSettings: {
+              ...defaultSettings.qaAgentSettings,
+              ...(parsed.qaAgentSettings ?? {}),
             },
           };
         } catch {

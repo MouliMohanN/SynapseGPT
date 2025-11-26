@@ -11,6 +11,7 @@ interface ChatPanelProps {
   selectedSectionId: string | null;
   settings: any;
   rightPanelWidth: number;
+  agentBottomOffset?: number;
 }
 
 export function ChatPanel({
@@ -18,6 +19,7 @@ export function ChatPanel({
   selectedSectionId,
   settings,
   rightPanelWidth,
+  agentBottomOffset = 0,
 }: ChatPanelProps) {
   const {
     chatMessages,
@@ -38,7 +40,13 @@ export function ChatPanel({
     handleScroll,
   } = useChat(selectedDocId, selectedSectionId, settings);
   return (
-    <section className="p-3 flex flex-col overflow-hidden bg-white" style={{ width: `${rightPanelWidth}%` }}>
+    <section 
+      className="p-3 flex flex-col overflow-hidden bg-white transition-all duration-300 ease-in-out" 
+      style={{ 
+        width: `${rightPanelWidth}%`,
+        paddingBottom: agentBottomOffset > 0 ? `${agentBottomOffset + 40}px` : undefined
+      }}
+    >
       <div className="flex flex-col gap-1 mb-2 shrink-0">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-800">Chat</h2>
@@ -207,7 +215,10 @@ export function ChatPanel({
         )}
         <div ref={chatEndRef} />
       </div>
-      <form className="flex flex-col gap-2" onSubmit={handleSend}>
+      <form 
+        className="flex flex-col gap-2 transition-all" 
+        onSubmit={handleSend}
+      >
         <textarea
           placeholder="Ask anything about this document… (Shift+Enter for new line)"
           className="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none min-h-[60px] text-slate-900"
