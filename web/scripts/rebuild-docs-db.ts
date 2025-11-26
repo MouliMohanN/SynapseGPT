@@ -1,5 +1,6 @@
 import { ChromaClient } from "chromadb";
 import { ingestDirectory } from "../src/lib/rag/ingestor";
+import { createChromaClient } from "../src/lib/rag/chroma-utils";
 import * as path from "path";
 import * as dotenv from "dotenv";
 
@@ -17,7 +18,7 @@ async function rebuildDocsDatabase() {
     console.log("🗑️  Step 1: Clearing existing documents collection...");
     
     // Use ChromaClient to delete the collection
-    const client = new ChromaClient({ path: CHROMA_URL });
+    const client = createChromaClient(CHROMA_URL);
     
     try {
       await client.deleteCollection({ name: COLLECTION_NAME });

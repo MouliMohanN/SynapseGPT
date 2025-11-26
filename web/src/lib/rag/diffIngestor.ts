@@ -6,6 +6,7 @@ import * as dotenv from "dotenv";
 import { getPatch, getPatchMetadata } from "@/lib/history";
 import { streamOllamaCompletion } from "@/lib/chat/ollamaClient";
 import { buildBehavioralPrompt, BehavioralSettings } from "@/lib/chat/settingsMapper";
+import { createChromaClient } from "./chroma-utils";
 
 dotenv.config({ path: ".env.local" });
 
@@ -24,9 +25,10 @@ let historyVectorStorePromise: Promise<Chroma> | null = null;
 
 async function getHistoryVectorStore() {
   if (!historyVectorStorePromise) {
+    const client = createChromaClient(CHROMA_URL);
     historyVectorStorePromise = Chroma.fromExistingCollection(embeddings, {
       collectionName: HISTORY_COLLECTION_NAME,
-      url: CHROMA_URL,
+      index: client,
     });
   }
   return historyVectorStorePromise;

@@ -1,16 +1,17 @@
 import { ChromaClient } from "chromadb";
 import * as dotenv from "dotenv";
+import { createChromaClient } from "../src/lib/rag/chroma-utils";
 
 // Load environment variables
 dotenv.config({ path: ".env.local" });
 
 const CHROMA_URL = process.env.CHROMA_DB_URL || "http://localhost:8000";
 
-async function testDatabaseLifecycle() {
-  console.log("🧪 Testing ChromaDB Lifecycle\n");
+async function testLifecycle() {
+  console.log("🧪 Starting DB Lifecycle Test...");
   console.log("=" .repeat(60));
 
-  const client = new ChromaClient({ path: CHROMA_URL });
+  const client = createChromaClient(CHROMA_URL);
 
   // Test 1: Check initial state
   console.log("\n📊 Test 1: Checking current database state...");
@@ -105,4 +106,4 @@ async function testDatabaseLifecycle() {
   console.log("✅ Database lifecycle test complete!\n");
 }
 
-testDatabaseLifecycle().catch(console.error);
+testLifecycle().catch(console.error);

@@ -4,6 +4,8 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as dotenv from "dotenv";
 import { ingestHistoryVersion } from "../src/lib/rag/diffIngestor";
+import { ChromaClient } from "chromadb"; // Keep for type hinting if needed, or remove if not used elsewhere
+import { createChromaClient } from "../src/lib/rag/chroma-utils";
 
 dotenv.config({ path: ".env.local" });
 
@@ -20,8 +22,7 @@ async function clearHistoryCollection() {
   
   try {
     // Use ChromaClient to delete the collection
-    const { ChromaClient } = await import("chromadb");
-    const client = new ChromaClient({ path: CHROMA_URL });
+    const client = createChromaClient(CHROMA_URL);
     
     try {
       await client.deleteCollection({ name: HISTORY_COLLECTION_NAME });

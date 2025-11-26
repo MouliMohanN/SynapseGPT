@@ -1,5 +1,6 @@
 import { ChromaClient } from "chromadb";
 import * as dotenv from "dotenv";
+import { createChromaClient } from "../src/lib/rag/chroma-utils";
 
 // Load environment variables
 dotenv.config({ path: ".env.local" });
@@ -9,7 +10,7 @@ const CHROMA_URL = process.env.CHROMA_DB_URL || "http://localhost:8000";
 async function inspectDatabase() {
   try {
     console.log("🔍 Connecting to ChromaDB...");
-    const client = new ChromaClient({ path: CHROMA_URL });
+    const client = createChromaClient(CHROMA_URL);
 
     console.log("📋 Fetching all collections...\n");
     const collections = await client.listCollections();

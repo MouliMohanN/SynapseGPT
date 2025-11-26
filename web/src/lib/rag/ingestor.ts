@@ -5,6 +5,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as dotenv from "dotenv";
+import { createChromaClient } from "./chroma-utils";
 
 dotenv.config({ path: ".env.local" });
 
@@ -31,9 +32,10 @@ let vectorStorePromise: Promise<Chroma> | null = null;
 
 async function getVectorStoreInstance() {
   if (!vectorStorePromise) {
+    const client = createChromaClient(CHROMA_URL);
     vectorStorePromise = Chroma.fromExistingCollection(embeddings, {
       collectionName: COLLECTION_NAME,
-      url: CHROMA_URL,
+      index: client,
     });
   }
   return vectorStorePromise;
@@ -93,9 +95,10 @@ async function processDocuments(documents: any[]): Promise<IngestionResult> {
     const chunks = await splitter.splitDocuments(documents);
     
     if (chunks.length > 0) {
+      const client = createChromaClient(CHROMA_URL);
       await Chroma.fromDocuments(chunks, embeddings, {
         collectionName: COLLECTION_NAME,
-        url: CHROMA_URL,
+        index: client,
       });
     }
 
