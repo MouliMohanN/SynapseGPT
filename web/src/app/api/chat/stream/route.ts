@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const history = getConversationHistory(conversationId);
+  // const history = getConversationHistory(conversationId);
 
   const documentContext = await buildDocumentContext(docId ?? null, sectionId ?? null);
   
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       try {
         const ollamaStream = streamOllamaResponse({
           messages: [
-            ...history.map((msg) => ({ role: msg.role, content: msg.content })),
+            // ...history.map((msg) => ({ role: msg.role, content: msg.content })),
             { role: "user", content: message },
           ],
           modelConfig: modelConfig,
@@ -82,13 +82,13 @@ export async function POST(request: Request) {
         }
 
         // Update conversation history after the stream completes.
-        const formattedContent = formatAssistantResponse(assistantContent);
+        // const formattedContent = formatAssistantResponse(assistantContent);
         
-        updateConversationHistory(
-          conversationId,
-          message,
-          formattedContent,
-        );
+        // updateConversationHistory(
+        //   conversationId,
+        //   message,
+        //   formattedContent,
+        // );
       } catch (err) {
         console.error("Stream error:", err);
         const errorMessage =

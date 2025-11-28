@@ -357,3 +357,8 @@ Environment variables are managed in `web/.env.local`.
 ## 📚 Further Reading
 - [Migration Tutorial](ai_docs/antiGravity/migration_tutorial.md): A detailed log of how we built this system.
 - [Optimization Analysis](ai_docs/antiGravity/optimization_analysis.md): Architectural decisions and trade-offs.
+
+
+
+brew services start redis
+brew services stop redis
