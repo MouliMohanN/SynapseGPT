@@ -1,5 +1,5 @@
-import { spawn } from "child_process";
-import * as path from "path";
+
+
 
 /**
  * Result of document conversion
@@ -16,49 +16,76 @@ export interface ConversionResult {
  * @param inputPath - Absolute path to the input document
  * @returns Promise with conversion result
  */
+import { McpClient } from "./mcp/McpClient";
+import * as path from "path";
+
+/**
+ * Result of document conversion
+ */
+export interface ConversionResult {
+  success: boolean;
+  markdown?: string;
+  error?: string;
+}
+
+/**
+ * Convert a document to Markdown using the Python Docling MCP Server.
+ * 
+ * @param inputPath - Absolute path to the input document
+ * @returns Promise with conversion result
+ */
 export async function convertDocumentToMarkdown(
   inputPath: string
 ): Promise<ConversionResult> {
-  return new Promise((resolve) => {
-    const scriptPath = path.resolve(process.cwd(), "..", "scripts", "convert_doc.py");
-    // Use venv's Python interpreter
-    const pythonPath = path.resolve(process.cwd(), "..", "venv", "bin", "python3");
+  try {
+    // Path to the Python virtual environment and server script
+    // We assume the server is located at servers/doc-converter
+    const serverDir = path.resolve(process.cwd(), "..", "servers", "doc-converter");
+    const venvPython = path.join(serverDir, ".venv", "bin", "python3");
+    const serverScript = path.join(serverDir, "server.py");
+
+    // Instantiate MCP Client
+    const client = new McpClient(
+      "doc-converter",
+      "0.1.0",
+      venvPython,
+      [serverScript]
+    );
+
+    // Connect and call the tool
+    await client.connect();
     
-    // Spawn Python process
-    const pythonProcess = spawn(pythonPath, [scriptPath, inputPath]);
-    
-    let stdout = "";
-    let stderr = "";
-    
-    pythonProcess.stdout.on("data", (data) => {
-      stdout += data.toString();
+    const result = await client.callTool("convert_document", {
+      path: inputPath,
     });
+
+    // Close the connection (or keep it open if we want to reuse it, 
+    // but for now we close it to avoid zombie processes)
+    await client.close();
+
+    // The tool returns the markdown string directly as content
+    // Note: The SDK response format might need adjustment depending on exact return shape
+    // Usually it returns { content: [{ type: "text", text: "..." }] }
+    // But let's assume for now we need to parse the result.
+    // Actually, the SDK `callTool` returns a CallToolResult.
     
-    pythonProcess.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-    
-    pythonProcess.on("close", (code) => {
-      if (code === 0) {
-        resolve({
-          success: true,
-          markdown: stdout,
-        });
-      } else {
-        resolve({
-          success: false,
-          error: stderr || `Python process exited with code ${code}`,
-        });
-      }
-    });
-    
-    pythonProcess.on("error", (error) => {
-      resolve({
-        success: false,
-        error: `Failed to spawn Python process: ${error.message}`,
-      });
-    });
-  });
+    const content = (result as any).content[0];
+    if (content.type !== "text") {
+      throw new Error("Unexpected response format from MCP server");
+    }
+
+    return {
+      success: true,
+      markdown: content.text,
+    };
+
+  } catch (error: any) {
+    console.error("MCP Conversion Error:", error);
+    return {
+      success: false,
+      error: error.message || "Unknown error during conversion",
+    };
+  }
 }
 
 /**

@@ -25,6 +25,7 @@
     "@langchain/community": "^1.0.4",
     "@langchain/ollama": "^1.0.1",
     "@langchain/textsplitters": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "@tailwindcss/typography": "^0.5.19",
     "@types/diff": "^7.0.2",
     "@types/react-syntax-highlighter": "^15.5.13",
@@ -38,9 +39,9 @@
     "react-dom": "19.2.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
+    "redis": "^4.7.0",
     "rehype-raw": "^7.0.0",
-    "remark-gfm": "^4.0.1",
-    "redis": "^4.7.0"
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -1,0 +1,12 @@
+[project]
+name = "doc-converter"
+version = "0.1.0"
+description = "MCP server for document conversion using Docling"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "docling>=2.0.0"
+]
+
+[project.scripts]
+dev = "server:main"
